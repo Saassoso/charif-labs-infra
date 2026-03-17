@@ -9,3 +9,11 @@ variable "domain_name" {
   type        = string
   default     = "charif-labs.tech"
 }
+
+variable "cloudflare_account_id" {
+  type = string
+}
+
+variable "cloudflare_zone_id" {
+  type = string
+}
