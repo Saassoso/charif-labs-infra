@@ -38,9 +38,9 @@ resource "cloudflare_record" "tunnel_cnames" {
 
 resource "cloudflare_record" "google_placeholder" {
   zone_id = data.cloudflare_zone.main.id
-  name    = "id" 
-  content = "provisioning-tenant"
-  type    = "CNAME"
+  name    = "id"
+  content = "192.0.2.1" 
+  type    = "A"
   proxied = false
 }
 
