@@ -9,11 +9,11 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
       service  = "http://authentik-server:9000"
     }
 
-    # Rule 2: Portainer
-    ingress_rule {
-      hostname = "mgmt.charif-labs.tech"
-      service  = "http://portainer:9000"
-    }
+   # Rule 2: Portainer
+   # ingress_rule {
+   #   hostname = "mgmt.charif-labs.tech"
+   #   service  = "http://portainer:9000"
+   # }
 
     # The required 404 safety net
     ingress_rule {

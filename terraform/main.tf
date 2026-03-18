@@ -38,9 +38,10 @@ resource "cloudflare_record" "tunnel_cnames" {
 
 resource "cloudflare_record" "google_placeholder" {
   zone_id = data.cloudflare_zone.main.id
-  name    = "id" # ou "gcpw"
+  name    = "id" 
   content = "provisioning-tenant"
-  type    = "TXT"
+  type    = "CNAME"
+  proxied = false
 }
 
 # Output the tunnel token (For Docker Compose)
