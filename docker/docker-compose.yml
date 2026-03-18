@@ -1,0 +1,9 @@
+include:
+  - cloudflared/docker-compose.yml
+  - authentik/docker-compose.yml
+
+# Define the shared network here
+networks:
+  sovereign_net:
+    driver: bridge
+    name: sovereign_net
