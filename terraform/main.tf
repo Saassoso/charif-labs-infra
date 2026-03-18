@@ -36,6 +36,13 @@ resource "cloudflare_record" "tunnel_cnames" {
   proxied  = true
 }
 
+resource "cloudflare_record" "google_placeholder" {
+  zone_id = data.cloudflare_zone.main.id
+  name    = "id" # ou "gcpw"
+  content = "provisioning-tenant"
+  type    = "TXT"
+}
+
 # Output the tunnel token (For Docker Compose)
 output "cloudflare_zero_trust_tunnel_cloudflared_token" {
   description = "Token to configure cloudflared daemon in Docker"
