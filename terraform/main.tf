@@ -44,6 +44,14 @@ resource "cloudflare_record" "google_placeholder" {
   proxied = false
 }
 
+resource "cloudflare_record" "microsoft_verification" {
+  zone_id = data.cloudflare_zone.main.id
+  name    = "ms"
+  content = "MS=ms76330167"
+  type    = "TXT"
+  ttl     = 1
+}
+
 # Output the tunnel token (For Docker Compose)
 output "cloudflare_zero_trust_tunnel_cloudflared_token" {
   description = "Token to configure cloudflared daemon in Docker"
