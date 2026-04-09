@@ -36,13 +36,6 @@ resource "cloudflare_record" "tunnel_cnames" {
   proxied  = true
 }
 
-resource "cloudflare_record" "google_placeholder" {
-  zone_id = data.cloudflare_zone.main.id
-  name    = "id"
-  content = "192.0.2.1" 
-  type    = "A"
-  proxied = false
-}
 
 resource "cloudflare_record" "microsoft_verification" {
   zone_id = data.cloudflare_zone.main.id
@@ -50,6 +43,15 @@ resource "cloudflare_record" "microsoft_verification" {
   content = "MS=ms76330167"
   type    = "TXT"
   ttl     = 1
+}
+
+resource "cloudflare_record" "google_site_verification" {
+  zone_id = data.cloudflare_zone.main.id
+  name    = "@"          
+  type    = "TXT"
+  content   = "google-site-verification=GBYb7L-TSlLVejW0eKSmT1y7gGIJjM-cvl8TKxx9lIQ"
+  ttl     = 3600         
+  comment = "Google domain verification — managed by Terraform"
 }
 
 # Output the tunnel token (For Docker Compose)
