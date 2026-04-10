@@ -1,0 +1,44 @@
+services:
+  postgresql-kc:
+    image: postgres:15
+    container_name: keycloak-db
+    restart: unless-stopped
+    volumes:
+      - kc_database:/var/lib/postgresql/data
+    environment:
+      POSTGRES_DB: keycloak
+      POSTGRES_USER: keycloak
+      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
+    env_file:
+      - .env
+    networks:
+      - sovereign_net
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak-server
+    command: start-dev # Remplacer par 'start' en production with HA Config
+    restart: unless-stopped
+    environment:
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://postgresql-kc/keycloak
+      KC_DB_USERNAME: keycloak
+      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
+      KEYCLOAK_ADMIN: akadmin
+      KEYCLOAK_ADMIN_PASSWORD: ${KC_ADMIN_PASSWORD}
+      KC_PROXY: edge
+      KC_HOSTNAME: auth.charif-labs.tech
+    env_file:
+      - .env
+    depends_on:
+      - postgresql-kc
+    networks:
+      - sovereign_net
+
+volumes:
+  kc_database:
+    name: keycloak_database
+
+networks:
+  sovereign_net:
+    external: true

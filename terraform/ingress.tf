@@ -3,19 +3,18 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
   tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id
 
   config {
-    # Rule 1: Authentik
+    # Routage Keycloak
     ingress_rule {
       hostname = "auth.charif-labs.tech"
-      service  = "http://authentik-server:9000"
+      service  = "http://keycloak-server:8080"
     }
 
-   # Rule 2: Portainer
-   # ingress_rule {
-   #   hostname = "mgmt.charif-labs.tech"
-   #   service  = "http://portainer:9000"
-   # }
+    # Routage Portainer
+    ingress_rule {
+      hostname = "mgmt.charif-labs.tech"
+      service  = "http://portainer:9000"
+    }
 
-    # The required 404 safety net
     ingress_rule {
       service = "http_status:404"
     }
