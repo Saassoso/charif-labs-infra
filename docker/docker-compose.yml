@@ -1,8 +1,8 @@
 include:
-  - cloudflared/docker-compose.yml
-  - authentik/docker-compose.yml
+  - core-identity/cloudflared/docker-compose.yml
+  - core-identity/keycloak/docker-compose.yml
+  - management/portainer/docker-compose.yml
 
-# Define the shared network here
 networks:
   sovereign_net:
     driver: bridge

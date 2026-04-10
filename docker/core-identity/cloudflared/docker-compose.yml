@@ -7,4 +7,4 @@ services:
 
 networks:
   sovereign_net:
-    external: true # Look for the network created by the Master file
+    external: true # Network created by the Master file
