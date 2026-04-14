@@ -17,3 +17,15 @@ variable "cloudflare_account_id" {
 variable "cloudflare_zone_id" {
   type = string
 }
+
+variable "keycloak_client_id" {
+  type        = string
+  description = "Client ID pour Cloudflare Access dans Keycloak"
+  default     = "cloudflare-access"
+}
+
+variable "keycloak_client_secret" {
+  type        = string
+  description = "Client Secret généré par Keycloak"
+  sensitive   = true
+}
