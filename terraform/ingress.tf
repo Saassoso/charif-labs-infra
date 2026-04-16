@@ -3,7 +3,7 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
   tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id
 
   config = {
-    ingress_rule = [
+    ingress = [          
       {
         hostname = "auth.charif-labs.tech"
         service  = "http://keycloak-server:8080"

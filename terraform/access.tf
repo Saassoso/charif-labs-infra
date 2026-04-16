@@ -4,7 +4,7 @@ resource "cloudflare_zero_trust_access_identity_provider" "keycloak_oidc" {
   name       = "Keycloak"
   type       = "oidc"
 
-config = {
+  config = {
     client_id     = var.keycloak_client_id
     client_secret = var.keycloak_client_secret
     auth_url      = "https://auth.charif-labs.tech/realms/charif-labs/protocol/openid-connect/auth"
@@ -14,26 +14,11 @@ config = {
   }
 }
 
-# --- Application Access ---
-resource "cloudflare_zero_trust_access_application" "wazuh_app" {
-  zone_id                   = var.cloudflare_zone_id
-  name                      = "Wazuh Dashboard"
-  domain                    = "wazuh.charif-labs.tech"
-  type                      = "self_hosted"
-  session_duration          = "8h"
-  
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]  
-  auto_redirect_to_identity = true
-}
-
-# Access Policy 
+# --- Standalone Reusable Policy (v5 style) ---
 resource "cloudflare_zero_trust_access_policy" "wazuh_policy" {
-  account_id     = var.cloudflare_account_id
-  
-  application_id = cloudflare_zero_trust_access_application.wazuh_app.id 
-  
-  name           = "Allow IT Admins Only"
-  decision       = "allow"
+  account_id = var.cloudflare_account_id
+  name       = "Allow IT Admins Only"
+  decision   = "allow"
 
   include = [{
     email_domain = { domain = "charif-labs.tech" }
@@ -45,5 +30,23 @@ resource "cloudflare_zero_trust_access_policy" "wazuh_policy" {
       claim_name           = "groups"
       claim_value          = "it-admin"
     }
+  }]
+}
+
+# --- Application Access ---
+resource "cloudflare_zero_trust_access_application" "wazuh_app" {
+  zone_id                   = var.cloudflare_zone_id
+  name                      = "Wazuh Dashboard"
+  domain                    = "wazuh.charif-labs.tech"
+  type                      = "self_hosted"
+  session_duration          = "8h"
+
+  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
+  auto_redirect_to_identity = true
+
+  # v5: policies are attached here, not on the policy resource
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.wazuh_policy.id
+    precedence = 1
   }]
 }
