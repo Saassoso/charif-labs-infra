@@ -64,19 +64,39 @@ resource "cloudflare_zero_trust_access_application" "portainer_app" {
   }]
 }
 
-# AUTH Keycloak 
-#resource "cloudflare_zero_trust_access_application" "auth_admin_app" {
-#  zone_id                   = var.cloudflare_zone_id
-# name                      = "Keycloak Admin Console"
-# domain                    = "auth.charif-labs.tech/admin/*" # Protège uniquement l'accès admin
-# type                      = "self_hosted"
-# session_duration          = "8h"
-# allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
-# auto_redirect_to_identity = true
-# 
-# # v5: policies are attached here, not on the policy resource
-# policies = [{
-#   id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
-#   precedence = 1
-# }]
-#}
+# --- Specific Policy for IT Admins ---
+resource "cloudflare_zero_trust_access_policy" "keycloak_admin_policy" {
+  account_id = var.cloudflare_account_id
+  name       = "Keycloak Admin Breakglass"
+  decision   = "allow"
+
+  include = [{
+    # CORRECT SYNTAX: Passing an object instead of an array
+    email = { email = "user-admin-01@ms.charif-labs.tech" }
+  }]
+
+  require = [{
+    oidc = {
+      identity_provider_id = cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id
+      claim_name           = "groups"
+      claim_value          = "it-admin"
+    }
+  }]
+}
+
+# --- Keycloak Admin Console (Dedicated Subdomain) ---
+resource "cloudflare_zero_trust_access_application" "auth_admin_app" {
+  zone_id                   = var.cloudflare_zone_id
+  name                      = "Keycloak Admin Console"
+  domain                    = "keycloak-admin.charif-labs.tech" 
+  type                      = "self_hosted"
+  session_duration          = "2h" 
+
+  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
+  auto_redirect_to_identity = true
+
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.keycloak_admin_policy.id # <-- UPDATED REFERENCE
+    precedence = 1
+  }]
+}

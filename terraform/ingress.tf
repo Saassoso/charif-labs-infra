@@ -13,6 +13,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
         service  = "http://portainer:9000"
       },
       {
+       hostname = "keycloak-admin.charif-labs.tech"
+       service  = "http://keycloak-server:8080"
+      },
+      {
         service = "http_status:404"
       }
     ]
@@ -22,6 +26,15 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
 resource "cloudflare_dns_record" "mgmt_dns" {
   zone_id = var.cloudflare_zone_id
   name    = "mgmt"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
+  ttl     = 1
+}
+
+resource "cloudflare_dns_record" "keycloak_admin_dns" {
+  zone_id = var.cloudflare_zone_id
+  name    = "keycloak-admin"
   content = "${cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id}.cfargotunnel.com"
   type    = "CNAME"
   proxied = true
