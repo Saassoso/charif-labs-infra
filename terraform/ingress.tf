@@ -15,6 +15,13 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
       {
        hostname = "keycloak-admin.charif-labs.tech"
        service  = "http://keycloak-server:8080"
+      },      
+      {
+        hostname = "wazuh.charif-labs.tech"
+        service  = "https://sovereign-stack-wazuh.dashboard-1:5601"
+        origin_request = {
+          no_tls_verify = true
+        }
       },
       {
         service = "http_status:404"

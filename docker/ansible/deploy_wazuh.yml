@@ -1,0 +1,20 @@
+---
+- name: Deploy Wazuh Agent to Windows
+  hosts: windows
+  tasks:
+    - name: Download Wazuh Agent MSI
+      win_get_url:
+        url:  https://packages.wazuh.com/4.x/windows/wazuh-agent-4.14.4-1.msi
+        dest: C:\Temp\wazuh-agent.msi
+
+    - name: Install Wazuh Agent
+      win_package:
+        path: C:\Temp\wazuh-agent.msi
+        arguments: /q WAZUH_MANAGER='10.0.30.2' WAZUH_REGISTRATION_SERVER='10.0.30.2' WAZUH_AGENT_NAME='{{ inventory_hostname }}'
+        state: present
+
+    - name: Ensure Wazuh Service is started
+      win_service:
+        name: Wazuh
+        state: started
+        start_mode: auto

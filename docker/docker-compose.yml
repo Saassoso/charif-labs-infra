@@ -2,6 +2,7 @@ include:
   - core-identity/cloudflared/docker-compose.yml
   - core-identity/keycloak/docker-compose.yml
   - management/portainer/docker-compose.yml
+  - wazuh/docker-compose.yml
 
 networks:
   sovereign_net:

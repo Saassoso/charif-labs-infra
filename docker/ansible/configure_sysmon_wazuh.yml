@@ -1,0 +1,64 @@
+---
+- name: Deploy Sysmon and Configure Wazuh Agent
+  hosts: windows
+  tasks:
+    - name: Ensure extraction directory exists
+      win_file:
+        path: C:\Windows\Temp\Sysmon
+        state: directory
+
+    - name: Download Sysmon
+      win_get_url:
+        url: https://download.sysinternals.com/files/Sysmon.zip
+        dest: C:\Windows\Temp\Sysmon.zip
+
+    - name: Extract Sysmon
+      win_unzip:
+        src: C:\Windows\Temp\Sysmon.zip
+        dest: C:\Windows\Temp\Sysmon
+        creates: C:\Windows\Temp\Sysmon\Sysmon64.exe
+
+    - name: Download sysmon-modular config
+      win_get_url:
+        url: https://raw.githubusercontent.com/olafhartong/sysmon-modular/master/sysmonconfig.xml
+        dest: C:\Windows\Temp\sysmonconfig.xml
+
+    - name: Install Sysmon with config
+      win_shell: |
+        $service = Get-Service -Name Sysmon64 -ErrorAction SilentlyContinue
+        if (-not $service) {
+            & "C:\Windows\Temp\Sysmon\Sysmon64.exe" -accepteula -i "C:\Windows\Temp\sysmonconfig.xml"
+            Write-Output "INSTALLED"
+        } else {
+            Write-Output "ALREADY_INSTALLED"
+        }
+      register: sysmon_install
+      changed_when: "'INSTALLED' in sysmon_install.stdout"
+
+    - name: Ensure Sysmon service is running
+      win_service:
+        name: Sysmon64
+        state: started
+        start_mode: auto
+
+    - name: Inject Sysmon EventChannel into Wazuh ossec.conf
+      win_shell: |
+        $path = 'C:\Program Files (x86)\ossec-agent\ossec.conf'
+        [xml]$xml = Get-Content $path
+        # Check if Sysmon block already exists
+        $sysmonExists = $xml.ossec_config.localfile | Where-Object { $_.location -eq 'Microsoft-Windows-Sysmon/Operational' }
+        if (-not $sysmonExists) {
+            $newNode = $xml.CreateElement('localfile')
+            $newNode.InnerXml = '<location>Microsoft-Windows-Sysmon/Operational</location><log_format>eventchannel</log_format>'
+            $xml.ossec_config.AppendChild($newNode)
+            $xml.Save($path)
+            Write-Output "CHANGED"
+        }
+      register: wazuh_config
+      changed_when: "'CHANGED' in wazuh_config.stdout"
+
+    - name: Restart Wazuh Service to apply changes
+      win_service:
+        name: WazuhSvc
+        state: restarted
+      when: wazuh_config.changed
