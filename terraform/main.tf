@@ -3,20 +3,22 @@ resource "random_id" "tunnel_secret" {
   byte_length = 35
 }
 
-# Create the Zero-Trust Tunnel
+# Zero-Trust Tunnel
 resource "cloudflare_zero_trust_tunnel_cloudflared" "sovereign_tunnel" {
   account_id = var.cloudflare_account_id
   name       = "sovereign-stack-tunnel"
   tunnel_secret   = random_id.tunnel_secret.b64_std
 }
 
-# Define the subdomains exactly as required by the Sovereign Security Stack v2.0
+# Subdomains needed
 locals {
-  services = [
-    "auth",  # Authentik SSO 
-    "trmm",  # Tactical RMM 
-    "n8n",   # SOAR Automation 
-    "wazuh"  # XDR Dashboard 
+ services = [
+    "auth", 
+    "n8n",   
+    "wazuh",
+    "grafana",
+    "mgmt",
+    "keycloak-admin"
   ]
 }
 
