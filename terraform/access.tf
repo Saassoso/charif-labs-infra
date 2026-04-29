@@ -132,7 +132,7 @@ resource "cloudflare_zero_trust_access_application" "auth_admin_app" {
   auto_redirect_to_identity = true
 
   policies = [{
-    id         = cloudflare_zero_trust_access_policy.keycloak_admin_policy.id # <-- UPDATED REFERENCE
+    id         = cloudflare_zero_trust_access_policy.keycloak_admin_policy.id 
     precedence = 1
   }]
 }
