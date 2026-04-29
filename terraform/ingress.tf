@@ -24,6 +24,10 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
         }
       },
       {
+       hostname = "n8n.charif-labs.tech"
+       service  = "http://n8n:5678"
+      },  
+      {
         service = "http_status:404"
       }
     ]
