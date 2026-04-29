@@ -15,7 +15,11 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
       {
        hostname = "keycloak-admin.charif-labs.tech"
        service  = "http://keycloak-server:8080"
-      },      
+      },  
+      {
+       hostname = "grafana.charif-labs.tech"
+       service  = "http://sovereign-stack-grafana-1:3000"
+      },    
       {
         hostname = "wazuh.charif-labs.tech"
         service  = "https://sovereign-stack-wazuh.dashboard-1:5601"
@@ -46,6 +50,15 @@ resource "cloudflare_dns_record" "mgmt_dns" {
 resource "cloudflare_dns_record" "keycloak_admin_dns" {
   zone_id = var.cloudflare_zone_id
   name    = "keycloak-admin"
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
+  ttl     = 1
+}
+
+resource "cloudflare_dns_record" "grafana_dns" {
+  zone_id = var.cloudflare_zone_id
+  name    = "grafana"
   content = "${cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id}.cfargotunnel.com"
   type    = "CNAME"
   proxied = true
