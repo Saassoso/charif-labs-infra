@@ -47,7 +47,7 @@ resource "cloudflare_zero_trust_access_application" "wazuh_app" {
   }]
 }
 
-# --- Application Access ---
+# --- n8n Access ---
 resource "cloudflare_zero_trust_access_application" "n8n_app" {
   zone_id                   = var.cloudflare_zone_id
   name                      = "n8n Dashboard"
@@ -65,7 +65,25 @@ resource "cloudflare_zero_trust_access_application" "n8n_app" {
   }]
 }
 
-# PORTAINER
+# --- grafana Access ---
+resource "cloudflare_zero_trust_access_application" "moniroting_app" {
+  zone_id                   = var.cloudflare_zone_id
+  name                      = "n8n Dashboard"
+  domain                    = "grafana.charif-labs.tech"
+  type                      = "self_hosted"
+  session_duration          = "8h"
+
+  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
+  auto_redirect_to_identity = true
+
+  # v5: policies are attached here, not on the policy resource
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
+    precedence = 1
+  }]
+}
+
+# PORTAINER Access
 resource "cloudflare_zero_trust_access_application" "portainer_app" {
   zone_id                   = var.cloudflare_zone_id
   name                      = "Portainer Management"
