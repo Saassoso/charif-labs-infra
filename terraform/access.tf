@@ -107,7 +107,6 @@ resource "cloudflare_zero_trust_access_policy" "keycloak_admin_policy" {
   decision   = "allow"
 
   include = [{
-    # CORRECT SYNTAX: Passing an object instead of an array
     email = { email = "user-admin-01@ms.charif-labs.tech" }
   }]
 
