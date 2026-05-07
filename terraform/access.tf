@@ -23,7 +23,7 @@ resource "cloudflare_zero_trust_access_policy" "admin_only_policy" {
   include = [{
     oidc = {
       identity_provider_id = cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id
-      claim_name           = "ztna_role"
+      claim_name           = "groups"
       claim_value          = "it-admin"
     }
   }]
