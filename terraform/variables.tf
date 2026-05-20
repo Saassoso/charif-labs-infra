@@ -29,3 +29,23 @@ variable "keycloak_client_secret" {
   description = "Client Secret généré par Keycloak"
   sensitive   = true
 }
+
+variable "forwarding_email" {
+  description = "Destination email for Cloudflare Email Routing catch-all"
+  type        = string
+}
+
+variable "admin_email" {
+  description = "Breakglass IT Admin email for Zero Trust policies"
+  type        = string
+}
+
+variable "ms_verification_code" {
+  description = "Microsoft domain verification TXT record value"
+  type        = string
+}
+
+variable "google_site_verification_code" {
+  description = "Google site verification TXT record value"
+  type        = string
+}

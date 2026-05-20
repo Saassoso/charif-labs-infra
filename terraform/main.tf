@@ -5,16 +5,16 @@ resource "random_id" "tunnel_secret" {
 
 # Zero-Trust Tunnel
 resource "cloudflare_zero_trust_tunnel_cloudflared" "sovereign_tunnel" {
-  account_id = var.cloudflare_account_id
-  name       = "sovereign-stack-tunnel"
-  tunnel_secret   = random_id.tunnel_secret.b64_std
+  account_id    = var.cloudflare_account_id
+  name          = "sovereign-stack-tunnel"
+  tunnel_secret = random_id.tunnel_secret.b64_std
 }
 
 # Subdomains needed
 locals {
- services = [
-    "auth", 
-    "n8n",   
+  services = [
+    "auth",
+    "n8n",
     "wazuh",
     "grafana",
     "mgmt",
@@ -25,20 +25,20 @@ locals {
 # Iterate through the subdomains and create proxied CNAME records pointing to the tunnel
 resource "cloudflare_dns_record" "tunnel_cnames" {
   for_each = toset(local.services)
-  
-  zone_id  = var.cloudflare_zone_id
-  name     = each.key
-  content    = "${cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id}.cfargotunnel.com"
-  type     = "CNAME"
-  proxied  = true
-  ttl      = 1
+
+  zone_id = var.cloudflare_zone_id
+  name    = each.key
+  content = "${cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id}.cfargotunnel.com"
+  type    = "CNAME"
+  proxied = true
+  ttl     = 1
 }
 
 # microsoft_verification subdomains 
 resource "cloudflare_dns_record" "microsoft_verification" {
   zone_id = var.cloudflare_zone_id
   name    = "ms"
-  content = "MS=ms76330167"
+  content = var.ms_verification_code
   type    = "TXT"
   ttl     = 1
 }
@@ -46,22 +46,20 @@ resource "cloudflare_dns_record" "microsoft_verification" {
 # google_site_verification domains
 resource "cloudflare_dns_record" "google_site_verification" {
   zone_id = var.cloudflare_zone_id
-  name    = "@"          
+  name    = "@"
   type    = "TXT"
-  content   = "google-site-verification=GBYb7L-TSlLVejW0eKSmT1y7gGIJjM-cvl8TKxx9lIQ"
-  ttl     = 3600         
+  content = var.google_site_verification_code
+  ttl     = 3600
   comment = "Google domain verification — managed by Terraform"
 }
-
 
 # Output the tunnel token (For Docker Compose)
 output "cloudflare_zero_trust_tunnel_cloudflared_token" {
   description = "Token to configure cloudflared daemon in Docker"
-  # Astuce v5 : On génère le token Base64 manuellement 
-  value       = base64encode(jsonencode({
+  value = base64encode(jsonencode({
     a = var.cloudflare_account_id
     t = cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id
     s = random_id.tunnel_secret.b64_std
   }))
-  sensitive   = true
+  sensitive = true
 }

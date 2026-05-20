@@ -1,13 +1,13 @@
-# 1. Define the Destination Address (Your personal Gmail)
+# the Destination Address
 resource "cloudflare_email_routing_address" "gmail_destination" {
   account_id = var.cloudflare_account_id
-  email      = "tisamplework@gmail.com"
+  email      = var.forwarding_email
 }
 
-# 2. Create the Catch-All Rule
+#  Catch-All Rule
 resource "cloudflare_email_routing_catch_all" "catch_all" {
   zone_id = var.cloudflare_zone_id
-  name    = "Catch all rule for charif-labs.tech"
+  name    = "Catch all rule for ${var.domain_name}"
   enabled = true
 
   matchers = [{
@@ -18,9 +18,4 @@ resource "cloudflare_email_routing_catch_all" "catch_all" {
     type  = "forward"
     value = [cloudflare_email_routing_address.gmail_destination.email]
   }]
-
-  # Ensure the destination is created before the rule
-  depends_on = [
-    cloudflare_email_routing_address.gmail_destination
-  ]
 }

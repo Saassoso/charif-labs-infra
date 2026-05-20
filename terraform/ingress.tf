@@ -3,34 +3,34 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
   tunnel_id  = cloudflare_zero_trust_tunnel_cloudflared.sovereign_tunnel.id
 
   config = {
-    ingress = [          
+    ingress = [
       {
-        hostname = "auth.charif-labs.tech"
+        hostname = "auth.${var.domain_name}"
         service  = "http://keycloak-server:8080"
       },
       {
-        hostname = "mgmt.charif-labs.tech"
+        hostname = "mgmt.${var.domain_name}"
         service  = "http://portainer:9000"
       },
       {
-       hostname = "keycloak-admin.charif-labs.tech"
-       service  = "http://keycloak-server:8080"
-      },  
+        hostname = "keycloak-admin.${var.domain_name}"
+        service  = "http://keycloak-server:8080"
+      },
       {
-       hostname = "grafana.charif-labs.tech"
-       service  = "http://sovereign-stack-grafana-1:3000"
-      },    
+        hostname = "grafana.${var.domain_name}"
+        service  = "http://sovereign-stack-grafana-1:3000"
+      },
       {
-        hostname = "wazuh.charif-labs.tech"
+        hostname = "wazuh.${var.domain_name}"
         service  = "https://sovereign-stack-wazuh.dashboard-1:5601"
         origin_request = {
           no_tls_verify = true
         }
       },
       {
-       hostname = "n8n.charif-labs.tech"
-       service  = "http://n8n:5678"
-      },  
+        hostname = "n8n.${var.domain_name}"
+        service  = "http://n8n:5678"
+      },
       {
         service = "http_status:404"
       }

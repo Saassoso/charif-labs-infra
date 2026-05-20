@@ -29,109 +29,81 @@ resource "cloudflare_zero_trust_access_policy" "admin_only_policy" {
   }]
 }
 
-# --- Application Access ---
-resource "cloudflare_zero_trust_access_application" "wazuh_app" {
-  zone_id                   = var.cloudflare_zone_id
-  name                      = "Wazuh Dashboard"
-  domain                    = "wazuh.charif-labs.tech"
-  type                      = "self_hosted"
-  session_duration          = "8h"
+# --- Application Access (DRY using for_each) ---
+locals {
+  access_apps = {
+    wazuh = {
+      name   = "Wazuh Dashboard"
+      domain = "wazuh.${var.domain_name}"
+    }
+    n8n = {
+      name   = "n8n Dashboard"
+      domain = "n8n.${var.domain_name}"
+    }
+    grafana = {
+      name   = "Grafana Monitoring"
+      domain = "grafana.${var.domain_name}"
+    }
+    portainer = {
+      name   = "Portainer Management"
+      domain = "mgmt.${var.domain_name}"
+    }
+  }
+}
+
+resource "cloudflare_zero_trust_access_application" "managed_apps" {
+  for_each = local.access_apps
+
+  zone_id          = var.cloudflare_zone_id
+  name             = each.value.name
+  domain           = each.value.domain
+  type             = "self_hosted"
+  session_duration = "8h"
 
   allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
   auto_redirect_to_identity = true
 
-  # v5: policies are attached here, not on the policy resource
   policies = [{
     id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
     precedence = 1
   }]
 }
 
-# --- n8n Access ---
-resource "cloudflare_zero_trust_access_application" "n8n_app" {
-  zone_id                   = var.cloudflare_zone_id
-  name                      = "n8n Dashboard"
-  domain                    = "n8n.charif-labs.tech"
-  type                      = "self_hosted"
-  session_duration          = "8h"
-
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
-  auto_redirect_to_identity = true
-
-  # v5: policies are attached here, not on the policy resource
-  policies = [{
-    id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
-    precedence = 1
-  }]
-}
-
-# --- grafana Access ---
-resource "cloudflare_zero_trust_access_application" "moniroting_app" {
-  zone_id                   = var.cloudflare_zone_id
-  name                      = "n8n Dashboard"
-  domain                    = "grafana.charif-labs.tech"
-  type                      = "self_hosted"
-  session_duration          = "8h"
-
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
-  auto_redirect_to_identity = true
-
-  # v5: policies are attached here, not on the policy resource
-  policies = [{
-    id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
-    precedence = 1
-  }]
-}
-
-# PORTAINER Access
-resource "cloudflare_zero_trust_access_application" "portainer_app" {
-  zone_id                   = var.cloudflare_zone_id
-  name                      = "Portainer Management"
-  domain                    = "mgmt.charif-labs.tech"
-  type                      = "self_hosted"
-  session_duration          = "8h"
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
-  auto_redirect_to_identity = true
-  
-  # v5: policies are attached here, not on the policy resource
-  policies = [{
-    id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
-    precedence = 1
-  }]
-}
-
-# --- Specific Policy for IT Admins ---
+# --- Specific Policy for IT Admins  & (Breakglass) ---
 resource "cloudflare_zero_trust_access_policy" "keycloak_admin_policy" {
   account_id = var.cloudflare_account_id
-  name       = "Keycloak Admin Breakglass"
+  name       = "Keycloak Admin Access (IT Admins & Breakglass)"
   decision   = "allow"
 
-  include = [{
-    email = { email = "user-admin-01@ms.charif-labs.tech" }
-  }]
-
-  require = [{
-    oidc = {
-      identity_provider_id = cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id
-      claim_name           = "groups"
-      claim_value          = "it-admin"
+  include = [
+    {
+      # 1. Allow standard IT Admins via OIDC
+      oidc = {
+        identity_provider_id = cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id
+        claim_name           = "groups"
+        claim_value          = "it-admin"
+      }
+    },
+    {
+      # 2. Allow the Emergency Breakglass email
+      email = { email = var.admin_email }
     }
-  }]
+  ]
 }
 
 # --- Keycloak Admin Console (Dedicated Subdomain) ---
 resource "cloudflare_zero_trust_access_application" "auth_admin_app" {
-  zone_id                   = var.cloudflare_zone_id
-  name                      = "Keycloak Admin Console"
-  domain                    = "keycloak-admin.charif-labs.tech" 
-  type                      = "self_hosted"
-  session_duration          = "2h" 
+  zone_id          = var.cloudflare_zone_id
+  name             = "Keycloak Admin Console"
+  domain           = "keycloak-admin.${var.domain_name}"
+  type             = "self_hosted"
+  session_duration = "2h"
 
   allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
   auto_redirect_to_identity = true
 
   policies = [{
-    id         = cloudflare_zero_trust_access_policy.keycloak_admin_policy.id 
+    id         = cloudflare_zero_trust_access_policy.keycloak_admin_policy.id
     precedence = 1
   }]
 }
