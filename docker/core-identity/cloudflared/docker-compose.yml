@@ -4,7 +4,9 @@ services:
     container_name: cloudflared-tunnel
     restart: unless-stopped
     command: tunnel --no-autoupdate run --token ${TUNNEL_TOKEN}
+    networks:
+      - sovereign_net
 
 networks:
   sovereign_net:
-    external: true # Network created by the Master file
+    external: true

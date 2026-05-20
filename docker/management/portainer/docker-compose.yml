@@ -16,4 +16,4 @@ volumes:
 
 networks:
   sovereign_net:
-    external: true # Network created by the Master file
+    external: true
