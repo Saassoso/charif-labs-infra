@@ -38,8 +38,6 @@ services:
 
       WEBHOOK_HTTP_BASE_PATH: "http://sovereign-stack-n8n-1:5678/webhook/jml-trigger"
 
-    env_file:
-      - .env
     depends_on:
       - postgresql-kc
     networks:
