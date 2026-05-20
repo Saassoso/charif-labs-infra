@@ -1,11 +1,9 @@
 include:
-  - core-identity/cloudflared/docker-compose.yml
-  - core-identity/keycloak/docker-compose.yml
-  - core-identity/vault/docker-compose.yml
-  - management/portainer/docker-compose.yml
-  - wazuh/docker-compose.yml
-  - n8n/docker-compose.yml
-  - monitoring/docker-compose.yml
+  - 2-applications/identity/docker-compose.yml
+  - 2-applications/secrets/docker-compose.yml
+  - 2-applications/automation/docker-compose.yml
+  - 2-applications/security/docker-compose.yml
+  - 2-applications/observability/docker-compose.yml
 
 networks:
   sovereign_net:
