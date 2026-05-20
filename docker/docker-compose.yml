@@ -9,5 +9,4 @@ include:
 
 networks:
   sovereign_net:
-    driver: bridge
-    name: sovereign_net
+    external: true
