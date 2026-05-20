@@ -1,0 +1,99 @@
+name: Charif Labs Infrastructure CI/CD
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  # ==========================================
+  # STAGE 1: SECURITY & SECRETS SCANNING
+  # ==========================================
+  security-checks:
+    name: Security & Secrets Scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Required for Gitleaks to scan history
+
+      - name: Scan for Hardcoded Secrets (Gitleaks)
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Infrastructure as Code Vulnerability Scan (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'config' # Scans Terraform, Docker, and Ansible files
+          hide-progress: false
+          format: 'table'
+          exit-code: '1' # Fails the pipeline if critical vulnerabilities are found
+          severity: 'CRITICAL,HIGH'
+
+  # ==========================================
+  # STAGE 2: VALIDATION & LINTING
+  # ==========================================
+  validate-infra:
+    name: Validate Terraform, Docker & Ansible
+    runs-on: ubuntu-latest
+    needs: security-checks # Only runs if security passes
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Format Check
+        run: terraform fmt -check
+        working-directory: ./terraform
+
+      - name: Terraform Validate
+        run: |
+          terraform init -backend=false
+          terraform validate
+        working-directory: ./terraform
+
+      - name: Validate Docker Compose
+        run: |
+          # Create a dummy .env so Compose doesn't fail on missing variables
+          touch docker/.env
+          docker compose -f docker/docker-compose.yml config -q
+
+  # ==========================================
+  # STAGE 3: AUTOMATIC VERSION TAGGING
+  # ==========================================
+  version-tagging:
+    name: Auto-Tag Version
+    runs-on: ubuntu-latest
+    needs: validate-infra
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' # Only tag on merges to main
+    outputs:
+      new_tag: ${{ steps.tag_version.outputs.new_tag }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: minor # Bumps v1.0.0 to v1.1.0 on merge
+          release_branches: main
+
+  # ==========================================
+  # STAGE 4: PORTAINER DEPLOYMENT
+  # ==========================================
+  deploy-production:
+    name: Trigger Portainer Webhook
+    runs-on: ubuntu-latest
+    needs: version-tagging # Only deploys if tested, scanned, and tagged
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - name: Call Portainer Webhook
+        run: |
+          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}"
