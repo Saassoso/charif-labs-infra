@@ -9,8 +9,6 @@ services:
       POSTGRES_DB: keycloak
       POSTGRES_USER: keycloak
       POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
-    env_file:
-      - .env
     networks:
       - sovereign_net
 
