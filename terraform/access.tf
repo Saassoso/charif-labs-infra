@@ -101,8 +101,8 @@ resource "cloudflare_zero_trust_access_application" "auth_admin_app" {
   session_duration = "2h"
 
   # 1. Routes authentication exclusively through your Keycloak OIDC provider
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
-  
+  allowed_idps = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
+
   # 2. Completely hides the Cloudflare login interface and instantly redirects to Keycloak
   auto_redirect_to_identity = true
 
