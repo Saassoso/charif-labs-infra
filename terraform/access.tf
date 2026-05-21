@@ -69,23 +69,15 @@ resource "cloudflare_zero_trust_access_application" "managed_apps" {
   }]
 }
 
-# --- Specific Policy for IT Admins  & (Breakglass) ---
+# --- Specific Policy for Keycloak Admin Gate (Email Pin Perimeter Shield) ---
 resource "cloudflare_zero_trust_access_policy" "keycloak_admin_policy" {
   account_id = var.cloudflare_account_id
-  name       = "Keycloak Admin Access (IT Admins & Breakglass)"
+  name       = "Keycloak Admin Perimeter Access"
   decision   = "allow"
 
   include = [
     {
-      # 1. Allow standard IT Admins via OIDC
-      oidc = {
-        identity_provider_id = cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id
-        claim_name           = "groups"
-        claim_value          = "it-admin"
-      }
-    },
-    {
-      # 2. Allow the Emergency Breakglass email
+      # Standardizes ingress to use your explicit administrator email PIN code
       email = { email = var.admin_email }
     }
   ]
