@@ -69,40 +69,42 @@ resource "cloudflare_zero_trust_access_application" "managed_apps" {
   }]
 }
 
-# --- LINK 1: The Charif Labs IAM Dashboard Portal ---
-resource "cloudflare_zero_trust_access_application" "iam_portal" {
-  zone_id              = var.cloudflare_zone_id
-  name                 = "Charif Labs Admin Portal"
-  domain               = "iam.${var.domain_name}"
-  type                 = "self_hosted"
-  app_launcher_visible = true # Makes this your visual home dashboard
-
-  allowed_idps = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
-
-  policies = [{
-    id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
-    precedence = 1
-  }]
-}
-
-# --- LINK 2: The Keycloak Master Admin Console ---
+# --- LINK 2: The Keycloak Master Admin Console Policy ---
 resource "cloudflare_zero_trust_access_policy" "keycloak_admin_perimeter" {
   account_id = var.cloudflare_account_id
   name       = "Keycloak Master Admin Perimeter Guard"
   decision   = "allow"
 
-  include = [{
-    # Completely isolates this link to your explicit email PIN
-    email = { email = var.admin_email }
-  }]
+  # Allows access IF the user belongs to the it-admin group OR matches your admin email
+  include = [
+    {
+      oidc = {
+        identity_provider_id = cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id
+        claim_name           = "groups"
+        claim_value          = "it-admin"
+      }
+    },
+    {
+      email = {
+        email = var.admin_email
+      }
+    }
+  ]
 }
 
+# --- Keycloak Admin Application Hook ---
 resource "cloudflare_zero_trust_access_application" "auth_admin_app" {
   zone_id          = var.cloudflare_zone_id
   name             = "Keycloak Master Console"
   domain           = "keycloak-admin.${var.domain_name}"
   type             = "self_hosted"
   session_duration = "2h"
+
+  # 1. Routes authentication exclusively through your Keycloak OIDC provider
+  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
+  
+  # 2. Completely hides the Cloudflare login interface and instantly redirects to Keycloak
+  auto_redirect_to_identity = true
 
   policies = [{
     id         = cloudflare_zero_trust_access_policy.keycloak_admin_perimeter.id

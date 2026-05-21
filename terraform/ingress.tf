@@ -9,10 +9,6 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
         service  = "http://keycloak-server:8080"
       },
       {
-        hostname = "iam.${var.domain_name}"
-        service  = "http://keycloak-server:8080"
-      },
-      {
         hostname = "mgmt.${var.domain_name}"
         service  = "http://portainer:9000"
       },

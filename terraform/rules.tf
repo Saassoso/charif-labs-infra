@@ -10,24 +10,25 @@ resource "cloudflare_ruleset" "realm_redirects" {
   phase       = "http_request_dynamic_redirect"
 
   rules = [
-    # --- RULE 1: IAM to charif-labs Realm ---
+    # --- RULE 1: IAM acts as an aggressive shortcut to the charif-labs realm console ---
     {
       action      = "redirect"
-      description = "IAM to Charif-Labs Realm"
-      expression  = "(http.host eq \"iam.${var.domain_name}\" and http.request.uri.path eq \"/\")"
+      description = "IAM to Charif-Labs Realm Admin Panel"
+      expression  = "(http.host eq \"iam.${var.domain_name}\")"
       enabled     = true
 
       action_parameters = {
         from_value = {
           status_code = 301
           target_url = {
-            value = "https://iam.${var.domain_name}/realms/charif-labs/account/"
+            # Bounces straight to the dedicated charif-labs login gate
+            value = "https://keycloak-admin.${var.domain_name}/admin/charif-labs/console/"
           }
         }
       }
     },
 
-    # --- RULE 2: Keycloak Admin to Master Realm ---
+    # --- RULE 2: Keycloak Admin naked domain acts as a quick-link to the Master console ---
     {
       action      = "redirect"
       description = "Keycloak Admin to Master Realm Console"
@@ -38,7 +39,7 @@ resource "cloudflare_ruleset" "realm_redirects" {
         from_value = {
           status_code = 301
           target_url = {
-            value = "https://keycloak-admin.${var.domain_name}/admin/"
+            value = "https://keycloak-admin.${var.domain_name}/admin/master/console/"
           }
         }
       }
