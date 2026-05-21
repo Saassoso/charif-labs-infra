@@ -25,7 +25,9 @@ jobs:
       - name: Scan for Hardcoded Secrets (Gitleaks)
         uses: gitleaks/gitleaks-action@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITLEAKS_LICENSE }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
+
 
       - name: Infrastructure as Code Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
