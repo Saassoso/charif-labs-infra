@@ -69,33 +69,64 @@ resource "cloudflare_zero_trust_access_application" "managed_apps" {
   }]
 }
 
-# --- Specific Policy for Keycloak Admin Gate (Email Pin Perimeter Shield) ---
-resource "cloudflare_zero_trust_access_policy" "keycloak_admin_policy" {
-  account_id = var.cloudflare_account_id
-  name       = "Keycloak Admin Perimeter Access"
-  decision   = "allow"
-
-  include = [
-    {
-      # Standardizes ingress to use your explicit administrator email PIN code
-      email = { email = var.admin_email }
-    }
-  ]
+# --- LINK 1: The Charif Labs IAM Dashboard Portal ---
+resource "cloudflare_zero_trust_access_application" "iam_portal" {
+  zone_id               = var.cloudflare_zone_id
+  name                  = "Charif Labs Admin Portal"
+  domain                = "iam.${var.domain_name}"
+  type                  = "self_hosted"
+  app_launcher_visible  = true # Makes this your visual home dashboard
+  
+  allowed_idps          = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
+  
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
+    precedence = 1
+  }]
 }
 
-# --- Keycloak Admin Console (Dedicated Subdomain) ---
+# --- LINK 2: The Keycloak Master Admin Console ---
+resource "cloudflare_zero_trust_access_policy" "keycloak_admin_perimeter" {
+  account_id = var.cloudflare_account_id
+  name       = "Keycloak Master Admin Perimeter Guard"
+  decision   = "allow"
+
+  include = [{
+    # Completely isolates this link to your explicit email PIN
+    email = { email = var.admin_email }
+  }]
+}
+
 resource "cloudflare_zero_trust_access_application" "auth_admin_app" {
   zone_id          = var.cloudflare_zone_id
-  name             = "Keycloak Admin Console"
+  name             = "Keycloak Master Console"
   domain           = "keycloak-admin.${var.domain_name}"
   type             = "self_hosted"
   session_duration = "2h"
 
-  allowed_idps              = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
-  auto_redirect_to_identity = true
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.keycloak_admin_perimeter.id
+    precedence = 1
+  }]
+}
+
+# --- LINK 3: The Public Auth Engine (No More Loops!) ---
+resource "cloudflare_zero_trust_access_policy" "public_auth_bypass" {
+  account_id = var.cloudflare_account_id
+  name       = "Allow Public Auth Traffic"
+  decision   = "bypass"
+
+  include = [{ everyone = {} }]
+}
+
+resource "cloudflare_zero_trust_access_application" "public_auth_engine" {
+  zone_id = var.cloudflare_zone_id
+  name    = "Keycloak Public Login Engine"
+  domain  = "auth.${var.domain_name}"
+  type    = "self_hosted"
 
   policies = [{
-    id         = cloudflare_zero_trust_access_policy.keycloak_admin_policy.id
+    id         = cloudflare_zero_trust_access_policy.public_auth_bypass.id
     precedence = 1
   }]
 }
