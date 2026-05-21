@@ -6,6 +6,9 @@ on:
   pull_request:
     branches: [ main ]
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # ==========================================
   # STAGE 1: SECURITY & SECRETS SCANNING
@@ -17,12 +20,12 @@ jobs:
       - name: Checkout Code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # Required for Gitleaks to scan history
+          fetch-depth: 0 
 
       - name: Scan for Hardcoded Secrets (Gitleaks)
         uses: gitleaks/gitleaks-action@v2
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITLEAKS_LICENSE }}
 
       - name: Infrastructure as Code Vulnerability Scan (Trivy)
         uses: aquasecurity/trivy-action@master
