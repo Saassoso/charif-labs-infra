@@ -108,30 +108,3 @@ resource "cloudflare_zero_trust_access_application" "auth_admin_app" {
   }]
 }
 
-# -----------------------------------------------------------
-# --- WEBHOOK BYPASS POLICY (FOR GITOPS/GITHUB CI/CD) ---
-# -----------------------------------------------------------
-
-
-resource "cloudflare_zero_trust_access_policy" "webhook_bypass_policy" {
-  account_id = var.cloudflare_account_id
-  name       = "Allow GitHub Webhooks Bypass"
-  decision   = "bypass"
-
-  include = [{
-    everyone = {}
-  }]
-}
-
-resource "cloudflare_zero_trust_access_application" "portainer_webhooks" {
-  zone_id          = var.cloudflare_zone_id
-  name             = "Portainer Webhooks Bypass"
-  # This targets the exact path without locking down the rest of Portainer
-  domain           = "mgmt.${var.domain_name}/api/stacks/webhooks"
-  type             = "self_hosted"
-
-  policies = [{
-    id         = cloudflare_zero_trust_access_policy.webhook_bypass_policy.id
-    precedence = 1
-  }]
-}
