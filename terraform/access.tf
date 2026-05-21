@@ -71,14 +71,14 @@ resource "cloudflare_zero_trust_access_application" "managed_apps" {
 
 # --- LINK 1: The Charif Labs IAM Dashboard Portal ---
 resource "cloudflare_zero_trust_access_application" "iam_portal" {
-  zone_id               = var.cloudflare_zone_id
-  name                  = "Charif Labs Admin Portal"
-  domain                = "iam.${var.domain_name}"
-  type                  = "self_hosted"
-  app_launcher_visible  = true # Makes this your visual home dashboard
-  
-  allowed_idps          = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
-  
+  zone_id              = var.cloudflare_zone_id
+  name                 = "Charif Labs Admin Portal"
+  domain               = "iam.${var.domain_name}"
+  type                 = "self_hosted"
+  app_launcher_visible = true # Makes this your visual home dashboard
+
+  allowed_idps = [cloudflare_zero_trust_access_identity_provider.keycloak_oidc.id]
+
   policies = [{
     id         = cloudflare_zero_trust_access_policy.admin_only_policy.id
     precedence = 1
