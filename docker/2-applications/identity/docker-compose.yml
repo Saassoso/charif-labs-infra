@@ -31,7 +31,9 @@ services:
 
       KC_PROXY_HEADERS: xforwarded
       KC_HOSTNAME: auth.charif-labs.tech
-      KC_HOSTNAME_ADMIN_URL: https://keycloak-admin.charif-labs.tech/
+      KC_HOSTNAME_ADMIN_URL: https://keycloak-admin.charif-labs.tech
+      KC_PROXY: edge
+      KC_HTTP_ENABLED: "true"
       KC_HOSTNAME_STRICT: "false"
 
       WEBHOOK_HTTP_BASE_PATH: "http://sovereign-stack-n8n-1:5678/webhook/jml-trigger"
