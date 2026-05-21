@@ -104,6 +104,10 @@ jobs:
     needs: version-tagging # Only deploys if tested, scanned, and tagged
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Call Portainer Webhook
+      - name: Call Portainer Webhooks
         run: |
-          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_URL }}"
+          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_AUTOMATION }}"
+          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_IDENTITY }}"
+          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_OBSERVABILITY }}"
+          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_SECRETS }}"
+          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_SECURITY }}"
