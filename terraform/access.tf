@@ -119,10 +119,10 @@ resource "cloudflare_zero_trust_access_policy" "webhook_bypass_policy" {
 }
 
 resource "cloudflare_zero_trust_access_application" "portainer_webhooks" {
-  zone_id          = var.cloudflare_zone_id
-  name             = "Portainer Webhooks Bypass"
-  domain           = "mgmt.${var.domain_name}/api/stacks/webhooks"
-  type             = "self_hosted"
+  zone_id = var.cloudflare_zone_id
+  name    = "Portainer Webhooks Bypass"
+  domain  = "mgmt.${var.domain_name}/api/stacks/webhooks"
+  type    = "self_hosted"
 
   policies = [{
     id         = cloudflare_zero_trust_access_policy.webhook_bypass_policy.id
