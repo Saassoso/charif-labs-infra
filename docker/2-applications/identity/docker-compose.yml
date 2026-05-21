@@ -29,8 +29,8 @@ services:
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
 
-      KC_HOSTNAME_STRICT: "true"
-      KC_HOSTNAME_STRICT_BACKCHANNEL: "true"
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
 
       KC_HOSTNAME: https://auth.charif-labs.tech
       KC_HOSTNAME_ADMIN: https://keycloak-admin.charif-labs.tech

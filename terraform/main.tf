@@ -18,6 +18,7 @@ locals {
     "wazuh",
     "grafana",
     "mgmt",
+    "iam",
     "keycloak-admin"
   ]
 }
