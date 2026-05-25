@@ -34,6 +34,15 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
         hostname = "n8n.${var.domain_name}"
         service  = "http://app-automation-n8n-1:5678"
       },
+      # --- ADDED WAZUH TCP ROUTES HERE ---
+      {
+        hostname = "wazuh-agent.${var.domain_name}"
+        service  = "tcp://10.0.30.2:1514"
+      },
+      {
+        hostname = "wazuh-auth.${var.domain_name}"
+        service  = "tcp://10.0.30.2:1515"
+      },
       {
         service = "http_status:404"
       }
