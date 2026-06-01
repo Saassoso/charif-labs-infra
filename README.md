@@ -8,39 +8,46 @@
 ## 🏗️ Architecture Overview
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
+┌──────────────────────────────────────────────────────────────────────────────┐
 │                         CLOUDFLARE EDGE (Zero Trust)                         │
-│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐ │
-│  │ auth.charif │  │wazuh.charif │  │ mgmt.charif │  │ keycloak-admin.char │ │
-│  │ -labs.tech  │  │ -labs.tech  │  │ -labs.tech  │  │ if-labs.tech        │ │
-│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └──────────┬──────────┘ │
-│         └─────────────────┴─────────────────┴────────────────────┘            │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────┐  │
+│  │ auth.charif │  │n8n.charif   │  │ mgmt.charif │  │ keycloak-admin.char │  │
+│  │ -labs.tech  │  │ -labs.tech  │  │ -labs.tech  │  │ if-labs.tech        │  │
+│  ├─────────────┤  ├─────────────┤  ├─────────────┤  ├─────────────────────┤  │
+│  │ wazuh.charif│  │grafana.chari│  │ iam.charif  │  │ vault (local only)  │  │
+│  │ -labs.tech  │  │ f-labs.tech │  │ -labs.tech  │  │                     │  │
+│  └──────┬──────┘  └──────┬──────┘  └──────┬──────┘  └─────────────────────┘  │
+│         └─────────────────┴─────────────────┴────────────────────┘           │
 │                                   │                                          │
 │                    ┌──────────────▼──────────────┐                           │
 │                    │   Cloudflare Tunnel (ZTNA)  │                           │
 │                    └──────────────┬──────────────┘                           │
-└───────────────────────────────────┼─────────────────────────────────────────┘
+└───────────────────────────────────┼──────────────────────────────────────────┘
                                     │
                             ┌───────▼────────┐
-                            │  Cloudflared   │  ◄── Docker Container
+                            │  Cloudflared   │  ◄── Docker Container (Foundation)
                             │    Daemon      │
                             └───────┬────────┘
                                     │ sovereign_net (bridge)
           ┌─────────────────────────┼─────────────────────────┐
           │                         │                         │
-   ┌──────▼──────┐          ┌───────▼───────┐       ┌────────▼────────┐
-   │  Keycloak   │          │   Wazuh Stack │       │   Portainer CE  │
-   │  (IdP/OIDC) │          │ ├─ Manager    │       │  (Docker Mgmt)  │
-   │  + Postgres │          │ ├─ Indexer    │       └─────────────────┘
-   └─────────────┘          │ └─ Dashboard  │
+   ┌──────▼──────┐          ┌────────▼───────┐       ┌────────▼────────┐
+   │  Keycloak   │          │  Wazuh Stack   │       │   Portainer CE  │
+   │  (IdP/OIDC) │          │  ├─ Manager    │       │  (Docker Mgmt)  │
+   │  + Postgres │          │  ├─ Indexer    │       └─────────────────┘
+   └─────────────┘          │  └─ Dashboard  │
+                            └────────────────┘
+   ┌──────────────┐         ┌───────────────┐         ┌─────────────────┐
+   │     n8n      │         │    Grafana    │         │  HashiCorp Vault│
+   │ (Automation) │         │  + Prometheus │         │  (Secrets Mgmt) │
+   └──────────────┘         │  + Node Exp.  │         └─────────────────┘
                             └───────────────┘
-                                    │
-                    ┌───────────────┴───────────────┐
-                    │     Windows Endpoints         │
-                    │  (Wazuh Agent + Sysmon)       │
-                    └───────────────────────────────┘
                                     ▲
-                                    │ WinRM / Ansible
+                                    │ SSH / Ansible
+┌───────────────────────────────────┴─────────────────────────────────────────┐
+│                         Docker Host (Linux)                                 │
+│              Managed via Ansible playbooks for baseline hardening           │
+└─────────────────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -50,32 +57,39 @@
 ```
 charif-labs-infra/
 ├── 📂 terraform/                 # Infrastructure as Code (Cloudflare)
-│   ├── main.tf                   # Tunnel + DNS records
+│   ├── main.tf                   # Tunnel + DNS records + verification TXT
 │   ├── provider.tf               # Cloudflare provider v5.x
 │   ├── variables.tf              # Input variables
 │   ├── access.tf                 # Zero Trust Access Apps & Keycloak IdP
 │   ├── ingress.tf                # Tunnel ingress routing rules
 │   ├── email.tf                  # Email routing (catch-all)
+│   ├── rules.tf                  # Redirect rules (iam → keycloak-admin)
+│   ├── tcp.tf                    # Wazuh agent/auth DNS records
 │   ├── moved.tf                  # State migration v4 → v5
 │   └── terraform.tfvars          # (SECRET — create locally)
 │
 ├── 📂 docker/                    # Container orchestration
-│   ├── docker-compose.yml        # Master compose (includes all stacks)
-│   ├── 📂 core-identity/
-│   │   ├── keycloak/
-│   │   │   ├── docker-compose.yml
-│   │   │   └── .env              # (SECRET — create locally)
-│   │   └── cloudflared/
-│   │       └── docker-compose.yml
-│   ├── 📂 management/
+│   ├── docker-compose.yml        # Orchestrator — includes all stacks
+│   ├── 📂 1-foundation/          # Base infrastructure services
+│   │   ├── cloudflared/
+│   │   │   └── docker-compose.yml    # Cloudflare Tunnel daemon
 │   │   └── portainer/
-│   │       └── docker-compose.yml
-│   └── 📂 wazuh/
-│       └── docker-compose.yml    # Wazuh Manager + Indexer + Dashboard
+│   │       └── docker-compose.yml    # Portainer CE (Docker UI)
+│   └── 📂 2-applications/        # Business logic services
+│       ├── identity/
+│       │   └── docker-compose.yml    # Keycloak + PostgreSQL
+│       ├── secrets/
+│       │   └── docker-compose.yml    # HashiCorp Vault
+│       ├── automation/
+│       │   └── docker-compose.yml    # n8n (workflow automation)
+│       ├── security/
+│       │   └── docker-compose.yml    # Wazuh (Manager + Indexer + Dashboard)
+│       └── observability/
+│           └── docker-compose.yml    # Prometheus + Grafana + Node Exporter
 │
-├── 📂 ansible/                   # Configuration management
-│   ├── inventory.ini             # (adapt to your endpoints)
-│   └── 📂 exemple/               # Example playbooks
+├── 📂 ansible/                   # Docker-host configuration management
+│   ├── inventory.ini             # (adapt to your Docker host)
+│   └── 📂 exemple/               # Example playbooks for host baseline
 │
 ├── 📂 docs/                      # 📖 Step-by-step guides
 │   ├── 01-Prerequisites-and-Architecture.md
@@ -83,9 +97,13 @@ charif-labs-infra/
 │   ├── 03-Docker-Sovereign-Stack.md
 │   ├── 04-Keycloak-Identity-Provider.md
 │   ├── 05-Wazuh-XDR-Deployment.md
-│   ├── 06-Ansible-Endpoint-Management.md
-│   └── 07-Zero-Trust-Access-Configuration.md
+│   ├── 06-Ansible-Docker-Host-Management.md
+│   ├── 07-Zero-Trust-Access-Configuration.md
+│   ├── 08-GitHub-Actions-CI-CD.md
+│   └── 09-Maintenance-and-Troubleshooting.md
 │
+├── .github/workflows/
+│   └── pipeline.yml              # CI/CD: security scan → validate → tag → deploy
 ├── .gitignore                    # Excludes .env, tfstate, .terraform
 └── README.md                     # ← You are here
 ```
@@ -101,7 +119,7 @@ These are the high-level steps.
 1. A domain managed by Cloudflare (e.g. `charif-labs.tech`)
 2. A Linux host with Docker + Docker Compose installed
 3. Terraform CLI ≥ 1.5.0
-4. Ansible (for Windows endpoint management)
+4. Ansible (for Docker host hardening & maintenance)
 5. A Gmail address for email-routing catch-all
 
 ### Phase 2 — Terraform (Cloudflare IaC)
@@ -113,16 +131,17 @@ terraform apply
 ```
 This creates:
 - A **Cloudflare Zero Trust Tunnel**
-- **DNS CNAME records** for `auth`, `wazuh`, `mgmt`, `keycloak-admin`
+- **DNS CNAME records** for all subdomains
 - **Email routing** catch-all rule
 - **Zero Trust Access Applications** protected by Keycloak OIDC
+- **Redirect rules** (e.g. `iam.` → Keycloak admin console)
 
 > 🔑 Copy the sensitive output `cloudflare_zero_trust_tunnel_cloudflared_token` — you will need it for Docker.
 
 ### Phase 3 — Secrets & Environment Files
 Create the following files **locally** (never commit them):
 
-**`docker/core-identity/keycloak/.env`**
+**`docker/core-identity/keycloak/.env`** (or `docker/2-applications/identity/.env`)
 ```bash
 KC_DB_PASSWORD=<strong_random_password>
 KC_ADMIN_PASSWORD=<strong_random_password>
@@ -139,40 +158,56 @@ keycloak_client_secret = "will_be_generated_in_keycloak"
 ### Phase 4 — Docker Stack
 ```bash
 cd docker/
+docker network create sovereign_net
 docker compose up -d
 ```
 This starts:
-- PostgreSQL database for Keycloak
-- Keycloak server (`auth.charif-labs.tech`)
-- Cloudflared tunnel daemon
-- Portainer (`mgmt.charif-labs.tech`)
-- Wazuh XDR platform (`wazuh.charif-labs.tech`)
+- **Cloudflared** tunnel daemon (foundation)
+- **Portainer** CE for Docker management (foundation)
+- **PostgreSQL** database for Keycloak (identity)
+- **Keycloak** server (identity)
+- **HashiCorp Vault** for secrets management (secrets)
+- **n8n** workflow automation (automation)
+- **Wazuh** XDR platform (security)
+- **Prometheus + Grafana + Node Exporter** (observability)
 
 ### Phase 5 — Keycloak Configuration
-1. Log in to `https://auth.charif-labs.tech/admin` (default: `akadmin`)
+1. Log in to `https://auth.charif-labs.tech/admin`
 2. Create a **realm** named `charif-labs`
 3. Create an **OIDC client** named `cloudflare-access`
 4. Add the `ztna_role` user attribute and map it to a claim
 5. Update `terraform.tfvars` with the generated **Client Secret**
 6. Re-run `terraform apply`
 
-### Phase 6 — Endpoint Deployment (Ansible)
+### Phase 6 — Ansible Docker-Host Hardening
 ```bash
-cd docker/ansible/
-ansible-playbook -i inventory.ini deploy_wazuh.yml
-ansible-playbook -i inventory.ini configure_sysmon_wazuh.yml
+cd ansible/
+ansible-playbook -i inventory.ini exemple/NTP_Installed.yaml
+# Adapt and extend playbooks for your Docker host baseline
 ```
+
+> Ansible in this project targets the **Linux Docker host** for baseline hardening, maintenance, and package management — not Windows endpoints.
+
+### Phase 7 — Verify Zero Trust Access
+Browse to each service and confirm Cloudflare Access prompts for Keycloak login:
+- `https://wazuh.charif-labs.tech`
+- `https://mgmt.charif-labs.tech`
+- `https://grafana.charif-labs.tech`
 
 ---
 
 ## 🌐 Service Map
 
-| Subdomain | Service | Access Control |
-|-----------|---------|----------------|
-| `auth.charif-labs.tech` | Keycloak SSO | Public (IdP) |
-| `wazuh.charif-labs.tech` | Wazuh Dashboard | Keycloak + `it-admin` role |
-| `mgmt.charif-labs.tech` | Portainer CE | Keycloak + `it-admin` role |
-| `keycloak-admin.charif-labs.tech` | Keycloak Admin Console | Keycloak + `it-admin` group + specific email |
+| Subdomain | Service | Stack | Access Control |
+|-----------|---------|-------|----------------|
+| `auth.charif-labs.tech` | Keycloak SSO | Identity | Public (IdP endpoint) |
+| `keycloak-admin.charif-labs.tech` | Keycloak Admin Console | Identity | Keycloak + `it-admin` group + admin email |
+| `iam.charif-labs.tech` | Shortcut to Keycloak Admin | Identity | 301 Redirect to `keycloak-admin` path |
+| `wazuh.charif-labs.tech` | Wazuh Dashboard | Security | Keycloak + `it-admin` role |
+| `n8n.charif-labs.tech` | n8n Automation | Automation | Keycloak + `it-admin` role |
+| `grafana.charif-labs.tech` | Grafana Monitoring | Observability | Keycloak + `it-admin` role |
+| `mgmt.charif-labs.tech` | Portainer CE | Foundation | Keycloak + `it-admin` role |
+| *(localhost:8200)* | Vault UI | Secrets | Localhost only (not exposed via tunnel) |
 
 ---
 
@@ -184,7 +219,9 @@ ansible-playbook -i inventory.ini configure_sysmon_wazuh.yml
 | **Identity** | Keycloak OIDC | Centralized SSO & RBAC |
 | **Access** | Cloudflare Access Applications | Per-app policies (role-based) |
 | **Network** | Docker Bridge (`sovereign_net`) | Container isolation |
-| **Endpoints** | Wazuh Agent + Sysmon | EDR / XDR telemetry |
+| **Secrets** | HashiCorp Vault | Centralized secrets management (localhost-bound) |
+| **Observability** | Wazuh + Prometheus/Grafana | Threat detection + infrastructure monitoring |
+| **Host** | Ansible playbooks | Baseline hardening of the Docker host |
 
 ---
 
@@ -207,11 +244,17 @@ Each doc is a standalone, step-by-step guide. Read them in order:
 5. **[05 — Wazuh XDR Deployment](docs/05-Wazuh-XDR-Deployment.md)**  
    SSL certificates, indexer configuration, dashboard access, and agent enrollment.
 
-6. **[06 — Ansible Endpoint Management](docs/06-Ansible-Endpoint-Management.md)**  
-   WinRM configuration, inventory setup, Wazuh agent deployment, and Sysmon integration.
+6. **[06 — Ansible Docker-Host Management](docs/06-Ansible-Docker-Host-Management.md)**  
+   Inventory setup and playbooks for Linux Docker host baseline hardening.
 
 7. **[07 — Zero Trust Access Configuration](docs/07-Zero-Trust-Access-Configuration.md)**  
    How Access Policies work, troubleshooting loops, and break-glass access.
+
+8. **[08 — GitHub Actions CI/CD](docs/08-GitHub-Actions-CI-CD.md)**  
+   Pipeline stages: secret scanning, validation, auto-tagging, and Portainer webhooks.
+
+9. **[09 — Maintenance and Troubleshooting](docs/09-Maintenance-and-Troubleshooting.md)**  
+   Common issues, log locations, restart procedures, and break-glass steps.
 
 ---
 
@@ -219,9 +262,11 @@ Each doc is a standalone, step-by-step guide. Read them in order:
 
 - **Never commit secrets.** `.gitignore` already excludes `.env`, `*.tfvars`, and `terraform.tfstate`.
 - **Keycloak is in `start-dev` mode.** For production, switch to `start` with proper hostname settings and a reverse-proxy certificate.
-- **Wazuh default passwords** are hard-coded in `docker/wazuh/docker-compose.yml`. Rotate them before production use.
+- **Wazuh default passwords** are hard-coded in `docker/2-applications/security/docker-compose.yml`. Rotate them before production use.
 - **Cloudflare tunnel token** is base64-encoded JSON. Treat it as sensitive as an API key.
 - **The `moved.tf` file** handles Terraform state migration from Cloudflare provider v4 to v5. Do not delete it if you have existing state.
+- **Vault is bound to localhost only.** It is intentionally not exposed through the Cloudflare tunnel. Access it via `ssh -L 8200:localhost:8200 <host>`.
+- **Ansible targets the Docker host.** All playbooks are designed for the Linux server running Docker, not for remote Windows endpoints.
 
 ---
 
@@ -240,8 +285,8 @@ docker logs cloudflared-tunnel --follow
 # Re-apply Terraform after changing variables
 terraform -chdir=terraform apply
 
-# Scale Wazuh (if needed)
-docker compose -f docker/wazuh/docker-compose.yml up -d
+# Restart individual application stack
+docker compose -f docker/2-applications/security/docker-compose.yml restart
 ```
 
 ---
@@ -253,4 +298,4 @@ Review and harden all default credentials before deploying to a production envir
 
 ---
 
-*Built with Terraform, Docker, Keycloak, Wazuh, Cloudflare Zero Trust, and Ansible.*
+*Built with Terraform, Docker, Keycloak, Wazuh, Cloudflare Zero Trust, HashiCorp Vault, n8n, Prometheus/Grafana, and Ansible.*

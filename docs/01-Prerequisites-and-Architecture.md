@@ -13,7 +13,7 @@ You need a **Cloudflare account** with the following already configured:
 | **Domain** registered & DNS active on Cloudflare | `dash.cloudflare.com` → select domain | `terraform/variables.tf` (default: `charif-labs.tech`) |
 | **Account ID** | Cloudflare Dashboard → right sidebar of domain overview | `terraform/terraform.tfvars` → `cloudflare_account_id` |
 | **Zone ID** | Cloudflare Dashboard → right sidebar of domain overview | `terraform/terraform.tfvars` → `cloudflare_zone_id` |
-| **API Token** | `My Profile` → `API Tokens` → `Create Token` → Use "Edit zone DNS" template, add `Zone:Read` and `DNS:Edit` for your zone | `terraform/terraform.tfvars` → `cloudflare_api_token` |
+| **API Token** | `My Profile` → `API Tokens` → `Create Token` | `terraform/terraform.tfvars` → `cloudflare_api_token` |
 
 ### How to Create a Cloudflare API Token (Step-by-Step)
 
@@ -25,8 +25,16 @@ You need a **Cloudflare account** with the following already configured:
    - **Zone:Read** — Include → Specific zone → `charif-labs.tech`
    - **DNS:Edit** — Include → Specific zone → `charif-labs.tech`
    - **Account:Read** — Include → All accounts
+   - **Access:Edit** — Include → All accounts (for Zero Trust apps)
+   - **Email Routing Rules:Edit** — Include → All accounts
 6. Click **Continue to summary** → **Create Token**.
 7. **Copy the token immediately** — Cloudflare shows it only once.
+
+<!-- SCREENSHOT_PLACEHOLDER -->
+> 🖼️ **Screenshot Placeholder**
+> **File:** `docs/assets/screenshots/01-cloudflare-api-token.png`
+> **Description:** Cloudflare "Create Token" screen showing the required permissions checked.
+> **When to capture:** After step 5, before creating the token.
 
 ---
 
@@ -79,6 +87,12 @@ sudo docker --version
 sudo docker compose version
 ```
 
+<!-- SCREENSHOT_PLACEHOLDER -->
+> 🖼️ **Screenshot Placeholder**
+> **File:** `docs/assets/screenshots/01-docker-version.png`
+> **Description:** Terminal showing `docker --version` and `docker compose version` output.
+> **When to capture:** After running the verification commands above.
+
 ### Terraform CLI
 
 ```bash
@@ -96,17 +110,19 @@ terraform -version
 
 Required: **Terraform ≥ 1.5.0**
 
-### Ansible (for Windows endpoint management)
+<!-- SCREENSHOT_PLACEHOLDER -->
+> 🖼️ **Screenshot Placeholder**
+> **File:** `docs/assets/screenshots/01-terraform-version.png`
+> **Description:** Terminal showing `terraform -version` output.
+
+### Ansible (for Docker host management)
 
 ```bash
 sudo apt install -y ansible
 ansible --version
 ```
 
-Optional: `pywinrm` for Windows remote management:
-```bash
-pip3 install pywinrm
-```
+> Ansible in this project is used to manage the **Linux Docker host itself** (baseline packages, NTP, hardening) — not remote endpoints. Endpoint agent deployment is handled via Action1.
 
 ---
 
@@ -130,9 +146,9 @@ The Terraform configuration sets up a **catch-all email rule**. Any email sent t
 | Static IP required | Works behind NAT / CGNAT |
 | Manual certificate management | Automatic TLS (full strict) |
 
-### Why Keycloak over Authentik?
+### Why Keycloak?
 
-This project uses **Keycloak** as the central IdP. It provides:
+**Keycloak** is the central IdP. It provides:
 - Full OIDC / SAML support
 - Fine-grained role mapping (`ztna_role`, `groups`)
 - Self-hosted sovereignty (no third-party IdP dependency)
@@ -144,6 +160,12 @@ Wazuh is an open-source XDR/SIEM platform. The stack includes:
 - **Manager** — collects logs & events from agents
 - **Indexer** — OpenSearch backend for storage & search
 - **Dashboard** — visualizes alerts, compliance, and inventory
+
+Endpoint enrollment and application deployment are handled via **Action1**, not Ansible.
+
+### Why HashiCorp Vault?
+
+Vault provides centralized secrets management. It is intentionally bound to **localhost only** (`127.0.0.1:8200`) and is not exposed through the Cloudflare tunnel. Access it via SSH port forwarding.
 
 ---
 
@@ -172,15 +194,19 @@ Internet
 │        │ Keycloak │            │ Wazuh  ││
 │        │ Postgres │            │ Stack  ││
 │        └──────────┘            └────────┘│
-│                                ┌────────┐│
-│                                │Portainer││
-│                                └────────┘│
+│        ┌──────────┐  ┌──────┐  ┌────────┐│
+│        │    n8n   │  │Vault │  │Portainer││
+│        └──────────┘  └──────┘  └────────┘│
+│        ┌──────────────────────────────┐   │
+│        │ Prometheus + Grafana + Node  │   │
+│        │            Exporter          │   │
+│        └──────────────────────────────┘   │
 └─────────────────────────────────────────┘
               │
-              ▼ WinRM (internal LAN)
+              ▼ SSH / Ansible
 ┌─────────────────────────────────────────┐
-│      Windows Endpoints (Agents)         │
-│     Wazuh Agent + Sysmon (EDR)          │
+│      Docker Host Baseline Hardening     │
+│     (packages, NTP, security settings)  │
 └─────────────────────────────────────────┘
 ```
 
@@ -192,18 +218,23 @@ Internet
 | PostgreSQL | `keycloak-db` | `5432` | Internal only |
 | Portainer | `portainer` | `9000` | Proxied by Cloudflare |
 | Wazuh Dashboard | `wazuh.dashboard` | `5601` | Mapped to host 443 |
-| Wazuh Manager | `wazuh.manager` | `55000` | Internal API |
+| Wazuh Manager | `wazuh.manager` | `55000` | Internal API; 1514/1515 for agents |
 | Wazuh Indexer | `wazuh.indexer` | `9200` | Internal only |
+| Vault | `core_vault` | `8200` | Localhost bind only |
+| n8n | `n8n-soar` | `5678` | Localhost bind + tunnel |
+| Grafana | `app-observability-grafana-1` | `3000` | Proxied by Cloudflare |
+| Prometheus | — | `9090` | Internal monitoring |
+| Node Exporter | — | `9100` | Host metrics |
 
 ---
 
 ## 1.7 Checklist Before Phase 2
 
-- [ ] Cloudflare domain is active and DNS-only or proxied
+- [ ] Cloudflare domain is active and DNS available
 - [ ] Account ID, Zone ID, and API Token copied to a safe place
 - [ ] Linux host has Docker + Docker Compose installed
 - [ ] Terraform ≥ 1.5.0 installed
-- [ ] Ansible installed (if managing Windows endpoints)
+- [ ] Ansible installed (for Docker host management)
 - [ ] Gmail address ready for email routing
 - [ ] Host meets minimum specs (RAM ≥ 8 GB)
 
