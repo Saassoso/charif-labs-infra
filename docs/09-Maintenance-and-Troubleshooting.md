@@ -101,7 +101,7 @@ sudo docker exec -i keycloak-db psql -U keycloak keycloak < keycloak_backup.sql
 ### Dashboard Access
 
 -   **URL**: `https://wazuh.charif-labs.tech`
--   **Credentials**: `admin` / `SecretPassword` (or your updated password from [Phase 5](05-Wazuh-XDR-Deployment.md)).
+-   **Paste Credentials**: `admin` / `SecretPassword` (That is already updated [Phase 5](05-Wazuh-XDR-Deployment.md)).
 
 ### Checking Indexer Health
 
