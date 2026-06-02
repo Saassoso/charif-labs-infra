@@ -36,6 +36,8 @@ services:
 
 volumes:
   n8n_data:
+    external: true
+    name: sovereign-stack_n8n_data
 
 networks:
   sovereign_net:
