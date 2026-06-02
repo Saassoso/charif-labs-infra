@@ -154,3 +154,24 @@ resource "cloudflare_zero_trust_access_application" "portainer_webhooks" {
     precedence = 1
   }]
 }
+
+# n8n webhook bypass (same pattern as portainer_webhooks)
+resource "cloudflare_zero_trust_access_policy" "n8n_webhook_bypass" {
+  account_id = var.cloudflare_account_id
+  name       = "Allow n8n Webhook Traffic"
+  decision   = "bypass"
+
+  include = [{ everyone = {} }]
+}
+
+resource "cloudflare_zero_trust_access_application" "n8n_webhooks" {
+  zone_id = var.cloudflare_zone_id
+  name    = "n8n Webhooks Bypass"
+  domain  = "n8n.${var.domain_name}/webhook" # only /webhook/* bypassed
+  type    = "self_hosted"
+
+  policies = [{
+    id         = cloudflare_zero_trust_access_policy.n8n_webhook_bypass.id
+    precedence = 1
+  }]
+}

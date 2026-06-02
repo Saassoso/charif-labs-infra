@@ -24,6 +24,10 @@ services:
       # Community Packages
       - N8N_COMMUNITY_PACKAGES_ENABLED=true
 
+      - N8N_PUSH_BACKEND=websocket   # ← was "sse", websockets survive CF Tunnel
+      - N8N_PROTOCOL=https           # ← add this, tells n8n it's behind HTTPS
+      - N8N_PORT=5678                # ← add this explicitly
+
     volumes:
       - n8n_data:/home/node/.n8n
     networks:
