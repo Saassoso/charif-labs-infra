@@ -38,6 +38,7 @@ services:
 
 
       WEBHOOK_HTTP_BASE_PATH: "http://sovereign-stack-n8n-1:5678/webhook/jml-trigger"
+      WEBHOOK_HTTP_HEADERS: '{"X-Keycloak-Token": "SECURE_SECRET_Keycloak-2026"}'
 
     depends_on:
       - postgresql-kc
