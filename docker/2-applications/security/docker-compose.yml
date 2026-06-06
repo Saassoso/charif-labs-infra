@@ -2,22 +2,21 @@
 services:
 
   # INIT CONTAINER
-
   wazuh.integrations-init:
-    image: wazuh/wazuh-manager:4.14.4
+    image: alpine:latest
     hostname: wazuh.init
     user: root
-    restart: "no" # This tells Docker to only run it once and stop
+    restart: "no"
     volumes:
       # Mounts your Git repo folder
       - ./config/integrations:/tmp/integrations
       # Mounts the exact same volume the manager uses
       - wazuh_integrations:/var/ossec/integrations
     command: >
-      bash -c "cp /tmp/integrations/custom-n8n.py /var/ossec/integrations/custom-n8n &&
-               chown root:wazuh /var/ossec/integrations/custom-n8n &&
-               chmod 750 /var/ossec/integrations/custom-n8n &&
-               echo 'Custom Integrations deployed successfully!'"
+      sh -c "cp /tmp/integrations/custom-n8n.py /var/ossec/integrations/custom-n8n &&
+             chown 0:940 /var/ossec/integrations/custom-n8n &&
+             chmod 750 /var/ossec/integrations/custom-n8n &&
+             echo 'Custom Integrations deployed successfully!'"
 
   wazuh.manager:
     image: wazuh/wazuh-manager:4.14.4
