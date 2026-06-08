@@ -30,7 +30,8 @@ jobs:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
       - name: Infrastructure as Code Vulnerability Scan (Trivy)
-        uses: aquasecurity/trivy-action@v0.28.0
+        # Pinned to a cryptographically secure, post-incident commit SHA
+        uses: aquasecurity/trivy-action@68b488a75bdf7fe1ef4c104a8b33221b42c3bf9c
         with:
           scan-type: 'config'
           skip-dirs: 'docker/2-applications/secrets/vault-data'
@@ -40,7 +41,7 @@ jobs:
           severity: 'CRITICAL,HIGH'
 
   # ==========================================
-  # STAGE 2: VALIDATION & LINTING
+  # STAGE 2: VALIDATION & LINTING (Runs in parallel)
   # ==========================================
   validate-infra:
     name: Validate Terraform, Docker & Ansible
@@ -69,7 +70,7 @@ jobs:
 
       - name: Terraform Validate
         env:
-          TF_VAR_cloudflare_api_token: "fake_token_for_validation"
+          TF_VAR_cloudflare_api_token: "fake"
           TF_VAR_cloudflare_account_id: "fake"
           TF_VAR_cloudflare_zone_id: "fake"
           TF_VAR_keycloak_client_secret: "fake"
@@ -90,7 +91,7 @@ jobs:
       - name: Run Ansible Lint
         uses: ansible/ansible-lint@main
         with:
-          working_directory: "./ansible"
+          working_directory: "ansible/"
 
   # ==========================================
   # STAGE 3: AUTOMATIC VERSION TAGGING
@@ -161,7 +162,7 @@ jobs:
     steps:
       - name: Generate Rich GitHub Step Summary
         run: |
-          echo "### Charif Labs Pipeline Failure" >> $GITHUB_STEP_SUMMARY
+          echo "### ❌ Charif Labs Pipeline Failure" >> $GITHUB_STEP_SUMMARY
           echo "The infrastructure deployment pipeline failed on commit **${{ github.sha }}**." >> $GITHUB_STEP_SUMMARY
           echo "#### Action Required:" >> $GITHUB_STEP_SUMMARY
           echo "Please check the specific failing Stage logs inside this Actions workflow run." >> $GITHUB_STEP_SUMMARY
