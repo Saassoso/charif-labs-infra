@@ -2,7 +2,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared-tunnel
-    restart: unless-stopped
+    restart: on-failure
     command: tunnel --no-autoupdate --protocol http2 run --token ${TUNNEL_TOKEN}
     networks:
       - sovereign_net
