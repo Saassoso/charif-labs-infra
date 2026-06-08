@@ -5,4 +5,3 @@
     - name: "Output some information on our host"
       ansible.builtin.debug:
         msg: "I am connecting to {{ ansible_nodename }} wich is running {{ ansible_distribution }} {{ ansible_distribution_version }}"
-        
