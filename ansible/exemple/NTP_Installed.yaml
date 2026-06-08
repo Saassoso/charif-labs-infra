@@ -1,4 +1,5 @@
-- name : Install the latest version of NTP
-  ansible.builtin.apt :
-    name : ntp
-    state : latest
+---
+- name: Install the latest version of NTP
+  ansible.builtin.apt:
+    name: ntp
+    state: latest
