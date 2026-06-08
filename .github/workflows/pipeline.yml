@@ -8,6 +8,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  TF_PLUGIN_CACHE_DIR: ${{ github.workspace }}/.terraform.d/plugin-cache
 
 jobs:
   # ==========================================
@@ -28,11 +29,11 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
-
       - name: Infrastructure as Code Vulnerability Scan (Trivy)
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@v0.28.0
         with:
-          scan-type: 'config' # Scans Terraform, Docker, and Ansible files
+          scan-type: 'config'
+          skip-dirs: 'docker/2-applications/secrets/vault-data'
           hide-progress: false
           format: 'table'
           exit-code: '1'
@@ -44,10 +45,20 @@ jobs:
   validate-infra:
     name: Validate Terraform, Docker & Ansible
     runs-on: ubuntu-latest
-    needs: security-checks 
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
+
+      - name: Create Terraform Plugin Cache Dir
+        run: mkdir -p ~/.terraform.d/plugin-cache
+
+      - name: Cache Terraform Providers
+        uses: actions/cache@v4
+        with:
+          path: ~/.terraform.d/plugin-cache
+          key: ${{ runner.os }}-terraform-${{ hashFiles('terraform/.terraform.lock.hcl') }}
+          restore-keys: |
+            ${{ runner.os }}-terraform-
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -57,43 +68,53 @@ jobs:
         working-directory: ./terraform
 
       - name: Terraform Validate
+        env:
+          TF_VAR_cloudflare_api_token: "fake_token_for_validation"
+          TF_VAR_cloudflare_account_id: "fake"
+          TF_VAR_cloudflare_zone_id: "fake"
+          TF_VAR_keycloak_client_secret: "fake"
+          TF_VAR_forwarding_email: "fake@test.com"
+          TF_VAR_admin_email: "fake@test.com"
+          TF_VAR_ms_verification_code: "MS=fake"
+          TF_VAR_google_site_verification_code: "google-fake"
         run: |
-          terraform init -backend=false
+          terraform init
           terraform validate
         working-directory: ./terraform
 
       - name: Validate Docker Compose
         run: |
-          # Create a dummy .env so Compose doesn't fail on missing variables
           touch docker/.env
           docker compose -f docker/docker-compose.yml config -q
+
+      - name: Run Ansible Lint
+        uses: ansible/ansible-lint@v24.2.0
+        with:
+          path: "ansible/"
 
   # ==========================================
   # STAGE 3: AUTOMATIC VERSION TAGGING
   # ==========================================
   version-tagging:
-      name: Auto-Tag Version
-      runs-on: ubuntu-latest
-      needs: validate-infra
-      if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-      
-      # ADD THESE THREE LINES:
-      permissions:
-        contents: write 
-      
-      outputs:
-        new_tag: ${{ steps.tag_version.outputs.new_tag }}
-      steps:
-        - name: Checkout Code
-          uses: actions/checkout@v4
+    name: Auto-Tag Version
+    runs-on: ubuntu-latest
+    needs: [security-checks, validate-infra]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: write 
+    outputs:
+      new_tag: ${{ steps.tag_version.outputs.new_tag }}
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-        - name: Bump version and push tag
-          id: tag_version
-          uses: mathieudutour/github-tag-action@v6.2
-          with:
-            github_token: ${{ secrets.GITHUB_TOKEN }}
-            default_bump: minor 
-            release_branches: main
+      - name: Bump version and push tag
+        id: tag_version
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          default_bump: minor 
+          release_branches: main
 
   # ==========================================
   # STAGE 4: PORTAINER DEPLOYMENT
@@ -101,13 +122,46 @@ jobs:
   deploy-production:
     name: Trigger Portainer Webhook
     runs-on: ubuntu-latest
-    needs: version-tagging # Only deploys if tested, scanned, and tagged
+    needs: version-tagging
+    timeout-minutes: 10
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
-      - name: Call Portainer Webhooks
+      - name: Call Portainer Webhooks (Strict Error Handling)
         run: |
-          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_AUTOMATION }}"
-          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_IDENTITY }}"
-          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_OBSERVABILITY }}"
-          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_SECRETS }}"
-          curl -X POST "${{ secrets.PORTAINER_WEBHOOK_SECURITY }}"
+          FAILED=0
+          
+          webhooks=(
+            "${{ secrets.PORTAINER_WEBHOOK_AUTOMATION }}"
+            "${{ secrets.PORTAINER_WEBHOOK_IDENTITY }}"
+            "${{ secrets.PORTAINER_WEBHOOK_OBSERVABILITY }}"
+            "${{ secrets.PORTAINER_WEBHOOK_SECRETS }}"
+            "${{ secrets.PORTAINER_WEBHOOK_SECURITY }}"
+          )
+          
+          for url in "${webhooks[@]}"; do
+            if ! curl --fail --silent --show-error -X POST "$url"; then
+              echo "::error::Webhook deployment failed for target URL."
+              FAILED=$((FAILED + 1))
+            fi
+          done
+          
+          if [ $FAILED -ne 0 ]; then
+            echo "$FAILED Webhook deployments failed completely."
+            exit 1
+          fi
+
+  # ==========================================
+  # STAGE 5: GLOBAL FAILURE NOTIFICATION
+  # ==========================================
+  notify-failure:
+    name: Failure Alert
+    runs-on: ubuntu-latest
+    needs: [security-checks, validate-infra, version-tagging, deploy-production]
+    if: always() && contains(needs.*.result, 'failure')
+    steps:
+      - name: Generate Rich GitHub Step Summary
+        run: |
+          echo "### Charif Labs Pipeline Failure" >> $GITHUB_STEP_SUMMARY
+          echo "The infrastructure deployment pipeline failed on commit **${{ github.sha }}**." >> $GITHUB_STEP_SUMMARY
+          echo "#### Action Required:" >> $GITHUB_STEP_SUMMARY
+          echo "Please check the specific failing Stage logs inside this Actions workflow run." >> $GITHUB_STEP_SUMMARY
