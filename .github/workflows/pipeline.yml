@@ -88,9 +88,9 @@ jobs:
           docker compose -f docker/docker-compose.yml config -q
 
       - name: Run Ansible Lint
-        uses: ansible/ansible-lint@v24.2.0
+        uses: ansible/ansible-lint@main
         with:
-          path: "ansible/"
+          working_directory: "./ansible"
 
   # ==========================================
   # STAGE 3: AUTOMATIC VERSION TAGGING
