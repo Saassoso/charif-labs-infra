@@ -1,15 +1,16 @@
 ---
-- name: Full Provisioning and Deployment of Sovereign Stack
+# ansible/playbooks/site.yml
+- name: Ensure python interpreter is available (needed for initial ssh connection)
   hosts: docker_hosts
   become: true
-  pre_tasks:
-    - name: Ensure python interpreter is available (needed for initial ssh connection)
-      raw: test -e /usr/bin/python3 || (apt update && apt install -y python3)
+  gather_facts: false
+  tasks:
+    - name: Install python3
+      ansible.builtin.raw: test -e /usr/bin/python3 || (apt update && apt install -y python3)
       changed_when: false
       run_once: true
       delegate_to: "{{ inventory_hostname }}"
 
-  # Include playbooks in order
-  - import_playbook: provision_docker_host.yml
-
-  - import_playbook: deploy_docker_stacks.yml
+# Include playbooks in order at the root level
+- import_playbook: provision_docker_host.yml
+- import_playbook: deploy_docker_stacks.yml

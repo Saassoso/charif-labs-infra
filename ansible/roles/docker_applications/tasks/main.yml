@@ -1,4 +1,5 @@
 ---
+# ansible/roles/docker_applications/tasks/main.yml
 - name: Ensure base Docker applications directory exists on remote host
   ansible.builtin.file:
     path: "{{ docker_root_path }}"
@@ -17,12 +18,12 @@
   ansible.builtin.find:
     paths: "{{ docker_root_path }}"
     patterns: docker-compose.yml
-    recurse: yes
+    recurse: true
   register: docker_compose_files
 
 - name: Deploy Docker Compose stacks
-  community.general.docker_compose_v2:
+  community.docker.docker_compose_v2:
     project_src: "{{ item.path | ansible.builtin.dirname }}"
     state: present
-    restarted: yes # Restart if any changes are detected
+    restarted: true
   loop: "{{ docker_compose_files.files }}"

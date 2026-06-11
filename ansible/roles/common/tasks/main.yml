@@ -1,23 +1,25 @@
+---
+# ansible/roles/common/tasks/main.yml
 - name: Update apt cache
   ansible.builtin.apt:
-    update_cache: yes
+    update_cache: true
     cache_valid_time: 3600
 
 - name: Install common packages
   ansible.builtin.apt:
-    name: 
+    name:
       - git
       - htop
       - curl
       - vim
       - ntp
-    state: latest
+    state: present
 
 - name: Ensure NTP service is running and enabled
   ansible.builtin.service:
     name: ntp
     state: started
-    enabled: yes
+    enabled: true
 
 - name: Ensure Python 3 is installed (for Ansible interpreter)
   ansible.builtin.apt:
