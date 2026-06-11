@@ -19,11 +19,11 @@
     paths: "{{ docker_root_path }}"
     patterns: docker-compose.yml
     recurse: true
-  register: docker_compose_files
+  register: docker_applications_compose_files
 
 - name: Deploy Docker Compose stacks
   ansible.builtin.command: docker compose up -d --remove-orphans
   args:
     chdir: "{{ item.path | ansible.builtin.dirname }}"
-  loop: "{{ docker_compose_files.files }}"
+  loop: "{{ docker_applications_compose_files.files }}"
   changed_when: false
