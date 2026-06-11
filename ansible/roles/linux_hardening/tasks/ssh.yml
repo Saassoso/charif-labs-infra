@@ -1,0 +1,13 @@
+---
+- name: Harden SSH configuration
+  ansible.builtin.lineinfile:
+    path: /etc/ssh/sshd_config
+    regexp: "^#?{{ item.key }}\\s"
+    line: "{{ item.key }} {{ item.value }}"
+    validate: "/usr/sbin/sshd -t -f %s"
+    state: present
+  loop:
+    - { key: "PasswordAuthentication", value: "{{ ssh_password_authentication | default('yes') }}" }
+    - { key: "PermitRootLogin", value: "{{ ssh_permit_root_login | default('no') }}" }
+    - { key: "X11Forwarding", value: "no" }
+  notify: Restart sshd
