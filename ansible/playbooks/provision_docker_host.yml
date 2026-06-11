@@ -1,0 +1,8 @@
+---
+- name: Provision and Harden Linux Docker Host
+  hosts: docker_hosts
+  become: true
+  roles:
+    - common
+    - docker_engine
+    - linux_hardening

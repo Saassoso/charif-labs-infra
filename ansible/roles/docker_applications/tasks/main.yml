@@ -1,0 +1,28 @@
+---
+- name: Ensure base Docker applications directory exists on remote host
+  ansible.builtin.file:
+    path: "{{ docker_root_path }}"
+    state: directory
+    mode: '0755'
+
+- name: Copy Docker applications directory to remote host
+  ansible.builtin.copy:
+    src: ../../../docker/
+    dest: "{{ docker_root_path }}/"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Find all docker-compose.yml files in copied applications
+  ansible.builtin.find:
+    paths: "{{ docker_root_path }}"
+    patterns: docker-compose.yml
+    recurse: yes
+  register: docker_compose_files
+
+- name: Deploy Docker Compose stacks
+  community.general.docker_compose_v2:
+    project_src: "{{ item.path | ansible.builtin.dirname }}"
+    state: present
+    restarted: yes # Restart if any changes are detected
+  loop: "{{ docker_compose_files.files }}"

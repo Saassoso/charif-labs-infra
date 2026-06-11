@@ -1,0 +1,18 @@
+---
+- name: Ensure admin users exist and have correct groups and SSH keys
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    groups: "{{ item.groups | join(',') }}"
+    append: yes
+    state: present
+    shell: /bin/bash
+    generate_ssh_key: no # Assume key is provided or already exists
+  loop: "{{ admin_users | default([]) }}"
+
+- name: Deploy SSH public keys for admin users
+  ansible.posix.authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.ssh_key }}"
+    state: present
+  loop: "{{ admin_users | default([]) }}"
+  when: item.ssh_key is defined and item.ssh_key | length > 0

@@ -1,0 +1,6 @@
+---
+- name: Deploy Docker Compose Application Stacks
+  hosts: docker_hosts
+  become: true
+  roles:
+    - docker_applications

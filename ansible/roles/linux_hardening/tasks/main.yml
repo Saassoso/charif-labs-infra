@@ -1,0 +1,12 @@
+---
+- name: Include SSH hardening tasks
+  ansible.builtin.include_tasks:
+    file: ssh.yml
+
+- name: Include Firewall configuration tasks
+  ansible.builtin.include_tasks:
+    file: firewall.yml
+
+- name: Include User management tasks
+  ansible.builtin.include_tasks:
+    file: users.yml
