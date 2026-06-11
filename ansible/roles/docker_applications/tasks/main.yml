@@ -22,8 +22,8 @@
   register: docker_compose_files
 
 - name: Deploy Docker Compose stacks
-  community.docker.docker_compose_v2:
-    project_src: "{{ item.path | ansible.builtin.dirname }}"
-    state: present
-    restarted: true
+  ansible.builtin.command: docker compose up -d --remove-orphans
+  args:
+    chdir: "{{ item.path | ansible.builtin.dirname }}"
   loop: "{{ docker_compose_files.files }}"
+  changed_when: false

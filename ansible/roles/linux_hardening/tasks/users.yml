@@ -3,10 +3,10 @@
   ansible.builtin.user:
     name: "{{ item.name }}"
     groups: "{{ item.groups | join(',') }}"
-    append: yes
+    append: true
     state: present
     shell: /bin/bash
-    generate_ssh_key: no 
+    generate_ssh_key: false
   loop: "{{ admin_users | default([]) }}"
 
 - name: Deploy SSH public keys for admin users
