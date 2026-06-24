@@ -2,7 +2,7 @@ services:
   cloudflared:
     image: cloudflare/cloudflared:latest
     container_name: cloudflared-tunnel
-    restart: on-failure
+    restart: unless-stopped # If the cloudflared process hangs due to a zombie TCP connection but doesn't technically "fail" (exit with an error code), Docker won't restart it under on-failure.
     command: tunnel --no-autoupdate --protocol http2 run --token ${TUNNEL_TOKEN}
     networks:
       - sovereign_net
