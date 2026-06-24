@@ -14,16 +14,16 @@
     group: "{{ ansible_user }}"
     mode: '0755'
 
-- name: Find all docker-compose.yml files in copied applications
+- name: Find all docker-compose.yml files in the 1-foundation stack
   ansible.builtin.find:
-    paths: "{{ docker_root_path }}"
+    paths: "{{ docker_root_path }}/1-foundation"
     patterns: docker-compose.yml
     recurse: true
-  register: docker_applications_compose_files
+  register: foundation_compose_files
 
-- name: Deploy Docker Compose stacks
+- name: Deploy ONLY Foundation stacks (Portainer & Cloudflared)
   ansible.builtin.command: docker compose up -d --remove-orphans
   args:
     chdir: "{{ item.path | ansible.builtin.dirname }}"
-  loop: "{{ docker_applications_compose_files.files }}"
+  loop: "{{ foundation_compose_files.files }}"
   changed_when: false
