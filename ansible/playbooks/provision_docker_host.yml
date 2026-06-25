@@ -6,3 +6,4 @@
     - common
     - docker_engine
     - linux_hardening
+    - tailscale
