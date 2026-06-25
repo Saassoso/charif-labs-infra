@@ -12,12 +12,11 @@
       - htop
       - curl
       - vim
-      - ntp
     state: present
 
-- name: Ensure NTP service is running and enabled
+- name: Ensure systemd-timesyncd service is running and enabled
   ansible.builtin.service:
-    name: ntp
+    name: systemd-timesyncd
     state: started
     enabled: true
 

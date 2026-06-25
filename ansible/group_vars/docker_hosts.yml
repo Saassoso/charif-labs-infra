@@ -28,7 +28,7 @@ admin_users:
     groups: [sudo, docker]
     # Assuming the public key for 'mgmt' user is available on the Ansible control machine
     # You might need to adjust this path or dynamically fetch the key
-    ssh_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_rsa.pub') }}"
+    ssh_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
 
 # SSH Hardening
 ssh_password_authentication: "no"
