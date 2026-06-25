@@ -51,3 +51,11 @@
     groups: docker
     append: true
   become: true
+
+- name: Set vm.max_map_count for Wazuh Indexer/OpenSearch
+  ansible.posix.sysctl:
+    name: vm.max_map_count
+    value: '262144'
+    state: present
+    reload: yes
+

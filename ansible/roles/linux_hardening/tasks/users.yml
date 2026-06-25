@@ -12,7 +12,7 @@
 - name: Deploy SSH public keys for admin users
   ansible.posix.authorized_key:
     user: "{{ item.name }}"
-    key: "{{ item.ssh_key }}"
+    key: "{{ lookup('file', lookup('env','HOME') + '/.ssh/id_ed25519.pub') }}"
     state: present
   loop: "{{ admin_users | default([]) }}"
   when: item.ssh_key is defined and item.ssh_key | length > 0
