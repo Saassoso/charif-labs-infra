@@ -3,9 +3,16 @@
   ansible.builtin.include_tasks:
     file: ssh.yml
 
-- name: Include Firewall configuration tasks
+- name: Check if Tailscale is connected
+  ansible.builtin.command: tailscale status
+  register: ts_status
+  changed_when: false
+  failed_when: false
+
+- name: Include Firewall configuration tasks (only after Tailscale is connected)
   ansible.builtin.include_tasks:
     file: firewall.yml
+  when: ts_status.rc == 0 and 'Logged out' not in ts_status.stdout
 
 - name: Include User management tasks
   ansible.builtin.include_tasks:

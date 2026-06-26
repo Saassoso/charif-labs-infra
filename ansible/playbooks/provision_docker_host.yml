@@ -4,8 +4,9 @@
   become: true
   vars_files:
     - ../vault.yml
+
   roles:
     - common
     - docker_engine
-    - linux_hardening
     - tailscale
+    - linux_hardening
