@@ -27,9 +27,22 @@
     recurse: true
   register: foundation_compose_files
 
-- name: Deploy ONLY Foundation stacks (Portainer & Cloudflared)
+- name: Deploy Cloudflared to ALL hosts (For Cloudflare Tunnel HA)
   ansible.builtin.command: docker compose up -d --remove-orphans
   args:
-    chdir: "{{ item.path | ansible.builtin.dirname }}"
-  loop: "{{ foundation_compose_files.files }}"
+    chdir: "{{ docker_root_path }}/1-foundation/cloudflared"
+  changed_when: false
+
+- name: Deploy Portainer Server ONLY to Primary Host
+  ansible.builtin.command: docker compose up -d --remove-orphans
+  args:
+    chdir: "{{ docker_root_path }}/1-foundation/portainer"
+  when: inventory_hostname == 'primary_host'
+  changed_when: false
+
+- name: Deploy Portainer Agent ONLY to Standby Host
+  ansible.builtin.command: docker compose up -d --remove-orphans
+  args:
+    chdir: "{{ docker_root_path }}/1-foundation/portainer-agent"
+  when: inventory_hostname == 'standby_host'
   changed_when: false
