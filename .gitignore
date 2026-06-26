@@ -20,4 +20,4 @@ override.tf.json
 *_override.tf.json
 
 .env
-*.env
+*.envansible/vault.yml
