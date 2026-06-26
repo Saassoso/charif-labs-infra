@@ -16,3 +16,12 @@
     state: present
   loop: "{{ admin_users | default([]) }}"
   when: item.ssh_key is defined and item.ssh_key | length > 0
+
+- name: Ensure passwordless sudo for mgmt user
+  ansible.builtin.lineinfile:
+    path: /etc/sudoers.d/mgmt
+    line: 'mgmt ALL=(ALL) NOPASSWD:ALL'
+    create: yes
+    validate: 'visudo -cf %s'
+    mode: '0440'
+
