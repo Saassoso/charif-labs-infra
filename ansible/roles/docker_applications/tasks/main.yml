@@ -37,12 +37,12 @@
   ansible.builtin.command: docker compose up -d --remove-orphans
   args:
     chdir: "{{ docker_root_path }}/1-foundation/portainer"
-  when: inventory_hostname == 'primary_host'
+  when: "'primary_host' in group_names"
   changed_when: false
 
 - name: Deploy Portainer Agent ONLY to Standby Host
   ansible.builtin.command: docker compose up -d --remove-orphans
   args:
     chdir: "{{ docker_root_path }}/1-foundation/portainer-agent"
-  when: inventory_hostname == 'standby_host'
+  when: "'standby_host' in group_names"
   changed_when: false
