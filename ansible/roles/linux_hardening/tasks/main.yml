@@ -9,10 +9,10 @@
   changed_when: false
   failed_when: false
 
-- name: Include Firewall configuration tasks (only after Tailscale is connected)
+- name: Include Firewall configuration tasks
   ansible.builtin.include_tasks:
     file: firewall.yml
-  when: ts_status.rc == 0 and 'Logged out' not in ts_status.stdout
+  when: "'100.' in ansible_host | default(inventory_hostname)"
 
 - name: Include User management tasks
   ansible.builtin.include_tasks:
