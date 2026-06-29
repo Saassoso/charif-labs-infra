@@ -167,17 +167,41 @@ jobs:
           fi
 
   # ==========================================
-  # STAGE 5: GLOBAL FAILURE NOTIFICATION
+  # STAGE 5: AUTOMATED DEPLOYMENT
   # ==========================================
-  notify-failure:
-    name: Failure Alert
+  deploy-production:
+    name: Deploy via Ansible
     runs-on: ubuntu-latest
-    needs: [security-checks, validate-infra, version-tagging, deploy-production]
-    if: always() && contains(needs.*.result, 'failure')
+    needs: [validate-infra] # Change this to match your previous job's name
     steps:
-      - name: Generate Rich GitHub Step Summary
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Connect to Tailscale VPN
+        uses: tailscale/github-action@v2
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTHKEY }}
+          tags: tag:ci
+
+      - name: Setup Python & Ansible
         run: |
-          echo "### ❌ Charif Labs Pipeline Failure" >> $GITHUB_STEP_SUMMARY
-          echo "The infrastructure deployment pipeline failed on commit **${{ github.sha }}**." >> $GITHUB_STEP_SUMMARY
-          echo "#### Action Required:" >> $GITHUB_STEP_SUMMARY
-          echo "Please check the specific failing Stage logs inside this Actions workflow run." >> $GITHUB_STEP_SUMMARY
+          pipx install ansible-core
+          ansible-galaxy collection install ansible.posix
+
+      - name: Configure SSH and Vault
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          VAULT_PASS: ${{ secrets.ANSIBLE_VAULT_PASSWORD }}
+        run: |
+          mkdir -p ~/.ssh
+          echo "$SSH_PRIVATE_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo -e "Host *\n\tStrictHostKeyChecking no\n" > ~/.ssh/config
+          echo "$VAULT_PASS" > .vault_pass
+
+      - name: Run Ansible Deployment Playbook
+        env:
+          ANSIBLE_VAULT_PASSWORD_FILE: .vault_pass
+        run: |
+          ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy_docker_stacks.yml \
+          --extra-vars "ansible_become_pass=${{ secrets.SUDO_PASSWORD }}"
