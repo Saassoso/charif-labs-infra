@@ -60,7 +60,7 @@
       KC_CACHE=ispn
       KC_CACHE_STACK=tcp
       KC_CLUSTER_LOCAL_ADDR={{ ansible_host }}
-      KC_HOSTNAME={{ keycloak_hostname }}
+      KC_HOSTNAME=https://{{ keycloak_hostname }}
       KEYCLOAK_ADMIN=admin
       KEYCLOAK_ADMIN_PASSWORD={{ keycloak_admin_password }}
     mode: '0600'
