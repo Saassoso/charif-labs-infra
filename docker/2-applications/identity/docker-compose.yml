@@ -1,53 +1,27 @@
 services:
-  postgresql-kc:
-    image: postgres:15
-    container_name: keycloak-db
-    restart: unless-stopped
-    volumes:
-      - kc_database:/var/lib/postgresql/data
-    environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
-      POSTGRES_PASSWORD: ${KC_DB_PASSWORD}
-    networks:
-      - sovereign_net
-
   keycloak:
     image: quay.io/keycloak/keycloak:latest
     container_name: keycloak-server
-    command: start-dev # À remplacer par 'start' en production avec HA
+    command: start # Production mode enabled!
     restart: unless-stopped
+    env_file: .env # Ansible injects the DO Database & Vault Secrets here
     volumes:
       - ./providers/keycloak-webhook-provider-core.jar:/opt/keycloak/providers/keycloak-webhook-provider-core.jar
       - ./providers/keycloak-webhook-provider-http.jar:/opt/keycloak/providers/keycloak-webhook-provider-http.jar
     environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgresql-kc/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: ${KC_DB_PASSWORD}
-
+      # Your custom proxy and proxy routing settings
       KC_PROXY_HEADERS: xforwarded
       KC_HTTP_ENABLED: "true"
-
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
-
-      KC_HOSTNAME: https://auth.charif-labs.tech
       KC_HOSTNAME_ADMIN: https://keycloak-admin.charif-labs.tech
-
-
-
+      
+      # Your N8N Webhook Triggers
       WEBHOOK_HTTP_BASE_PATH: "http://sovereign-stack-n8n-1:5678/webhook/jml-trigger"
       WEBHOOK_HTTP_HEADERS: '{"X-Keycloak-Token": "SECURE_SECRET_Keycloak-2026"}'
-
-    depends_on:
-      - postgresql-kc
+      
     networks:
       - sovereign_net
-
-volumes:
-  kc_database:
-    name: keycloak_database
 
 networks:
   sovereign_net:
