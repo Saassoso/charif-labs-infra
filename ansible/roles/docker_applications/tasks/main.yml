@@ -80,9 +80,8 @@
       DASHBOARD_USER={{ wazuh_indexer_user }}
       DASHBOARD_PASS={{ wazuh_indexer_pass }}
     mode: '0600'
-  when: "'primary_host' in group_names"
 
-- name: Deploy Remaining Stateful Stacks ONLY to Primary Host
+- name: Deploy All Stacks to All Hosts (Active-Passive Steering via Cloudflare)
   ansible.builtin.command: docker compose up -d --remove-orphans
   args:
     chdir: "{{ docker_root_path }}/2-applications/{{ item }}"
@@ -91,5 +90,35 @@
     - observability
     - secrets
     - security
-  when: "'primary_host' in group_names"
   changed_when: false
+
+# ==========================================
+# AUTOMATED REPLICATION SETUP (PRIMARY ONLY)
+# ==========================================
+- name: Deploy Automated HA Replication Script to Primary Host
+  ansible.builtin.copy:
+    dest: /opt/sync-to-standby.sh
+    owner: root
+    group: root
+    mode: '0755'
+    content: |
+      #!/bin/bash
+      STANDBY="100.107.233.53"
+      STANDBY_USER="mgmt"
+
+      if docker ps | grep -q keycloak-db; then
+        docker exec keycloak-db pg_dump -U keycloak keycloak > /tmp/kc-backup.sql
+        scp -o StrictHostKeyChecking=no /tmp/kc-backup.sql $STANDBY_USER@$STANDBY:/tmp/kc-backup.sql
+        ssh -o StrictHostKeyChecking=no $STANDBY_USER@$STANDBY "docker exec -i keycloak-db psql -U keycloak keycloak < /tmp/kc-backup.sql"
+      fi
+
+      rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" /opt/docker_apps/2-applications/security/config/ $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/security/config/
+      rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" /opt/docker_apps/2-applications/secrets/vault-data/ $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/secrets/vault-data/
+  when: "'primary_host' in group_names"
+
+- name: Schedule Hourly Asynchronous Data Sync Cron Job
+  ansible.builtin.cron:
+    name: "Sovereign Stack HA Core Replication"
+    minute: "0"
+    job: "/opt/sync-to-standby.sh >> /var/log/ha-sync.log 2>&1"
+  when: "'primary_host' in group_names"
