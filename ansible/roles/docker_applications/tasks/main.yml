@@ -112,8 +112,13 @@
         ssh -o StrictHostKeyChecking=no $STANDBY_USER@$STANDBY "docker exec -i keycloak-db psql -U keycloak keycloak < /tmp/kc-backup.sql"
       fi
 
-      rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" /opt/docker_apps/2-applications/security/config/ $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/security/config/
-      rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" /opt/docker_apps/2-applications/secrets/vault-data/ $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/secrets/vault-data/
+      rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
+        /opt/docker_apps/2-applications/security/config/ \
+        $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/security/config/
+
+      rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
+        /opt/docker_apps/2-applications/secrets/vault-data/ \
+        $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/secrets/vault-data/
   when: "'primary_host' in group_names"
 
 - name: Schedule Hourly Asynchronous Data Sync Cron Job
