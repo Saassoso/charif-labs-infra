@@ -4,6 +4,8 @@
   ansible.builtin.file:
     path: "{{ docker_root_path }}"
     state: directory
+    owner: "{{ ansible_user | default('mgmt') }}"
+    group: "{{ ansible_user | default('mgmt') }}"
     mode: '0755'
 
 - name: Fast Sync Docker applications directory using Rsync
@@ -12,6 +14,7 @@
     dest: "{{ docker_root_path }}/"
     archive: true
     delete: true
+  become: false
 
 - name: Ensure external Docker network 'sovereign_net' exists
   ansible.builtin.command: docker network create sovereign_net
