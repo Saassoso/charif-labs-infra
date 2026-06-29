@@ -94,9 +94,6 @@ jobs:
           echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
           ansible-galaxy collection install ansible.posix
 
-      - name: Install Ansible POSIX Collection
-        run: ansible-galaxy collection install ansible.posix
-
       - name: Run Ansible Lint
         uses: ansible/ansible-lint@main
         env:
@@ -130,49 +127,13 @@ jobs:
           release_branches: main
 
   # ==========================================
-  # STAGE 4: PORTAINER DEPLOYMENT
-  # ==========================================
-  deploy-production:
-    name: Trigger Portainer Webhook
-    runs-on: ubuntu-latest
-    needs: version-tagging
-    timeout-minutes: 10
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    steps:
-      - name: Call Portainer Webhooks (Strict Error Handling)
-        run: |
-          FAILED=0
-          
-          webhooks=(
-            "${{ secrets.PORTAINER_WEBHOOK_AUTOMATION }}"
-            "${{ secrets.PORTAINER_WEBHOOK_IDENTITY }}"
-            "${{ secrets.PORTAINER_WEBHOOK_OBSERVABILITY }}"
-            "${{ secrets.PORTAINER_WEBHOOK_SECRETS }}"
-            "${{ secrets.PORTAINER_WEBHOOK_SECURITY }}"
-          )
-          
-          for url in "${webhooks[@]}"; do
-            # Skip empty webhooks if some aren't configured yet
-            if [ -z "$url" ]; then continue; fi
-            
-            if ! curl --fail --silent --show-error -X POST "$url"; then
-              echo "::error::Webhook deployment failed for a target URL."
-              FAILED=$((FAILED + 1))
-            fi
-          done
-          
-          if [ $FAILED -ne 0 ]; then
-            echo "$FAILED Webhook deployments failed completely."
-            exit 1
-          fi
-
-  # ==========================================
-  # STAGE 5: AUTOMATED DEPLOYMENT
+  # STAGE 4: TRUE GITOPS DEPLOYMENT (ANSIBLE)
   # ==========================================
   deploy-production:
     name: Deploy via Ansible
     runs-on: ubuntu-latest
-    needs: [validate-infra] # Change this to match your previous job's name
+    needs: [version-tagging]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
@@ -205,3 +166,18 @@ jobs:
         run: |
           ansible-playbook -i ansible/inventory.ini ansible/playbooks/deploy_docker_stacks.yml \
           --extra-vars "ansible_become_pass=${{ secrets.SUDO_PASSWORD }}"
+
+  # ==========================================
+  # STAGE 5: GLOBAL FAILURE NOTIFICATION
+  # ==========================================
+  notify-failure:
+    name: Failure Alert
+    runs-on: ubuntu-latest
+    needs: [security-checks, validate-infra, version-tagging, deploy-production]
+    if: always() && contains(needs.*.result, 'failure')
+    steps:
+      - name: Generate Rich GitHub Step Summary
+        run: |
+          echo "### ❌ Charif Labs Pipeline Failure" >> $GITHUB_STEP_SUMMARY
+          echo "The infrastructure deployment pipeline failed on commit **${{ github.sha }}**." >> $GITHUB_STEP_SUMMARY
+          echo "#### Action Required:" >> $GITHUB_STEP_SUMMARY
