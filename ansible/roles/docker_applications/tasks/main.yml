@@ -77,6 +77,8 @@
       WAZUH_INDEXER_PASS={{ wazuh_indexer_pass }}
       WAZUH_API_USER={{ wazuh_api_user }}
       WAZUH_API_PASS={{ wazuh_api_pass }}
+      DASHBOARD_USER={{ wazuh_indexer_user }}
+      DASHBOARD_PASS={{ wazuh_indexer_pass }}
     mode: '0600'
   when: "'primary_host' in group_names"
 
