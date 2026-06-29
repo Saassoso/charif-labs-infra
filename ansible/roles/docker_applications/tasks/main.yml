@@ -81,10 +81,16 @@
       DASHBOARD_PASS={{ wazuh_indexer_pass }}
     mode: '0600'
 
-- name: Pre-pull heavy application images to avoid deployment timeouts
-  ansible.builtin.command: docker compose pull
+- name: Pre-pull heavy images only if they are missing locally
+  ansible.builtin.shell: |
+    for img in $(docker compose config --images); do
+      if ! docker image inspect "$img" >/dev/null 2>&1; then
+        docker pull "$img"
+      fi
+    done
   args:
     chdir: "{{ docker_root_path }}/2-applications/{{ item }}"
+    executable: /bin/bash
   loop:
     - automation
     - observability
