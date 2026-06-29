@@ -1,0 +1,5 @@
+---
+# Tell the linter to bypass checking for these raw external modules in CI
+mock_modules:
+  - ansible.posix.synchronize
+  - ansible.posix.sysctl
