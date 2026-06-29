@@ -85,6 +85,7 @@ jobs:
       - name: Validate Docker Compose
         run: |
           touch docker/.env
+          touch docker/2-applications/identity/.env
           docker compose -f docker/docker-compose.yml config -q
 
       - name: Run Ansible Lint
