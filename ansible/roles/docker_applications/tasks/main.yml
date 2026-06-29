@@ -81,6 +81,17 @@
       DASHBOARD_PASS={{ wazuh_indexer_pass }}
     mode: '0600'
 
+- name: Pre-pull heavy application images to avoid deployment timeouts
+  ansible.builtin.command: docker compose pull
+  args:
+    chdir: "{{ docker_root_path }}/2-applications/{{ item }}"
+  loop:
+    - automation
+    - observability
+    - secrets
+    - security
+  changed_when: false
+
 - name: Deploy All Stacks to All Hosts (Active-Passive Steering via Cloudflare)
   ansible.builtin.command: docker compose up -d --remove-orphans
   args:
