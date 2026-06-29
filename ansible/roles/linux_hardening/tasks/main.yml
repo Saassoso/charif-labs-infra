@@ -5,7 +5,7 @@
 
 - name: Check if Tailscale is connected
   ansible.builtin.command: tailscale status
-  register: ts_status
+  register: linux_hardening_ts_status
   changed_when: false
   failed_when: false
 

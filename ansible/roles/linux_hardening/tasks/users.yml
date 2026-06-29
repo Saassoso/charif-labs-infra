@@ -21,6 +21,6 @@
   ansible.builtin.lineinfile:
     path: /etc/sudoers.d/mgmt
     line: 'mgmt ALL=(ALL) NOPASSWD:ALL'
-    create: yes
+    create: true
     validate: 'visudo -cf %s'
     mode: '0440'

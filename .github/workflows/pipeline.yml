@@ -88,8 +88,16 @@ jobs:
           touch docker/2-applications/identity/.env
           docker compose -f docker/docker-compose.yml config -q
 
+      - name: Prepare Ansible Environment
+        working-directory: ./ansible
+        run: |
+          echo "${{ secrets.ANSIBLE_VAULT_PASSWORD }}" > .vault_pass
+          ansible-galaxy collection install ansible.posix
+
       - name: Run Ansible Lint
         uses: ansible/ansible-lint@main
+        env:
+          ANSIBLE_VAULT_PASSWORD_FILE: .vault_pass
         with:
           working_directory: "ansible/"
 
