@@ -15,16 +15,16 @@
 
 - name: Ensure external Docker network 'sovereign_net' exists
   ansible.builtin.command: docker network create sovereign_net
-  register: create_net
-  failed_when: "create_net.rc != 0 and 'already exists' not in create_net.stderr"
-  changed_when: "create_net.rc == 0"
+  register: docker_applications_create_net
+  failed_when: "docker_applications_create_net.rc != 0 and 'already exists' not in docker_applications_create_net.stderr"
+  changed_when: "docker_applications_create_net.rc == 0"
 
 - name: Find all docker-compose.yml files in the 1-foundation stack
   ansible.builtin.find:
     paths: "{{ docker_root_path }}/1-foundation"
     patterns: docker-compose.yml
     recurse: true
-  register: foundation_compose_files
+  register: docker_applications_foundation_compose_files
 
 - name: Deploy Cloudflared to ALL hosts (For Cloudflare Tunnel HA)
   ansible.builtin.command: docker compose up -d --remove-orphans
