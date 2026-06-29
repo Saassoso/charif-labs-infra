@@ -1,5 +1,4 @@
 ---
-# ansible/roles/docker_applications/tasks/main.yml
 - name: Ensure base Docker applications directory exists on remote host
   ansible.builtin.file:
     path: "{{ docker_root_path }}"
@@ -58,7 +57,6 @@
       KC_DB_USERNAME={{ keycloak_db_user }}
       KC_DB_PASSWORD={{ keycloak_db_password }}
       KC_CACHE=ispn
-      KC_CACHE_STACK=tcp
       KC_CLUSTER_LOCAL_ADDR={{ ansible_host }}
       KC_HOSTNAME=https://{{ keycloak_hostname }}
       KEYCLOAK_ADMIN=admin
@@ -70,6 +68,17 @@
   args:
     chdir: "{{ docker_root_path }}/2-applications/identity"
   changed_when: false
+
+- name: Generate Wazuh/Security .env securely from Vault
+  ansible.builtin.copy:
+    dest: "{{ docker_root_path }}/2-applications/security/.env"
+    content: |
+      WAZUH_INDEXER_USER={{ wazuh_indexer_user }}
+      WAZUH_INDEXER_PASS={{ wazuh_indexer_pass }}
+      WAZUH_API_USER={{ wazuh_api_user }}
+      WAZUH_API_PASS={{ wazuh_api_pass }}
+    mode: '0600'
+  when: "'primary_host' in group_names"
 
 - name: Deploy Remaining Stateful Stacks ONLY to Primary Host
   ansible.builtin.command: docker compose up -d --remove-orphans
