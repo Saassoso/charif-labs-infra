@@ -21,3 +21,4 @@ override.tf.json
 
 .env
 *.envansible/vault.yml
+*.sql
