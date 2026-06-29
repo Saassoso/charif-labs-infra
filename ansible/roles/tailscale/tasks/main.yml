@@ -35,3 +35,4 @@
 - name: Authenticate Tailscale to the mesh network
   ansible.builtin.command: "tailscale up --authkey={{ tailscale_auth_key }} --accept-routes"
   when: "tailscale_status.rc != 0 or 'Logged out' in tailscale_status.stdout"
+  changed_when: true
