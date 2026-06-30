@@ -17,24 +17,21 @@ resource "cloudflare_zero_trust_tunnel_cloudflared_config" "tunnel_config" {
         service  = "http://keycloak-server:8080"
       },
       {
-        # UPDATED
         hostname = "grafana.${var.domain_name}"
-        service  = "http://app-observability-grafana-1:3000"
+        service  = "http://observability-grafana-1:3000"
       },
       {
-        # UPDATED
         hostname = "wazuh.${var.domain_name}"
-        service  = "https://app-security-wazuh.dashboard-1:5601"
+        service  = "https://security-wazuh.dashboard-1:5601"
         origin_request = {
           no_tls_verify = true
         }
       },
       {
-        # UPDATED
         hostname = "n8n.${var.domain_name}"
-        service  = "http://app-automation-n8n-1:5678"
+        service  = "http://automation-n8n-1:5678"
       },
-      # --- ADDED WAZUH TCP ROUTES HERE ---
+      # --- WAZUH TCP ROUTES ---
       {
         hostname = "wazuh-agent.${var.domain_name}"
         service  = "tcp://10.0.30.2:1514"
