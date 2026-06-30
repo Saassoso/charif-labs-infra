@@ -3,3 +3,9 @@
 mock_modules:
   - ansible.posix.synchronize
   - ansible.posix.sysctl
+exclude_paths:
+  - .github/
+  - docker/
+warn_list:
+  - args
+  - yaml
