@@ -32,6 +32,13 @@
     recurse: true
   register: docker_applications_foundation_compose_files
 
+- name: Generate Cloudflared Tunnel configuration securely from Vault
+  ansible.builtin.copy:
+    dest: "{{ docker_root_path }}/1-foundation/cloudflared/.env"
+    content: |
+      TUNNEL_TOKEN={{ cloudflare_tunnel_token }}
+    mode: '0600'
+
 - name: Deploy Cloudflared to ALL hosts (For Cloudflare Tunnel HA)
   ansible.builtin.command: docker compose up -d --remove-orphans
   args:
