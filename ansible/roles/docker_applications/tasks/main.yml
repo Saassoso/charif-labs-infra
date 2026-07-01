@@ -121,9 +121,72 @@
   changed_when: false
 
 # ==========================================
-# AUTOMATED REPLICATION SETUP (PRIMARY ONLY)
+# AUTOMATED REPLICATION & SPLIT-BRAIN FENCING (PRIMARY ONLY)
 # ==========================================
-- name: Deploy Automated HA Replication Script to Primary Host
+- name: Deploy HA Boot-Lock Systemd Service (Prevents Split-Brain on Reboot)
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/ha-boot-lock.service
+    owner: root
+    group: root
+    mode: '0644'
+    content: |
+      [Unit]
+      Description=Sovereign Stack HA Boot Lock
+      After=network.target
+
+      [Service]
+      Type=oneshot
+      ExecStart=/bin/touch /var/run/ha-split-brain.lock
+      RemainAfterExit=yes
+
+      [Install]
+      WantedBy=multi-user.target
+  when: "'primary_host' in group_names"
+
+- name: Enable HA Boot-Lock Service
+  ansible.builtin.systemd:
+    name: ha-boot-lock.service
+    enabled: yes
+    state: started
+  when: "'primary_host' in group_names"
+
+- name: Deploy Manual HA Failback Recovery Script
+  ansible.builtin.copy:
+    dest: /opt/failback-recovery.sh
+    owner: root
+    group: root
+    mode: '0755'
+    content: |
+      #!/bin/bash
+      echo "INITIATING HA FAILBACK RECOVERY"
+      STANDBY="100.107.233.53"
+      STANDBY_USER="mgmt"
+
+      echo "Stopping local containers to prevent file locks..."
+      cd /home/mgmt/sovereign-stack/docker/2-applications/security && docker compose down
+      cd /home/mgmt/sovereign-stack/docker/2-applications/automation && docker compose down
+      cd /home/mgmt/sovereign-stack/docker/2-applications/secrets && docker compose down
+
+      echo "Recovering N8N Workflows..."
+      sudo rsync -avz --delete --rsync-path="sudo rsync" -e "ssh -o StrictHostKeyChecking=no" \
+        $STANDBY_USER@$STANDBY:/var/lib/docker/volumes/sovereign-stack_n8n_data/_data/ \
+        /var/lib/docker/volumes/sovereign-stack_n8n_data/_data/
+
+      echo "Recovering Vault Secrets..."
+      sudo rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
+        $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/secrets/vault-data/ \
+        /opt/docker_apps/2-applications/secrets/vault-data/
+
+      echo "Recovering Wazuh Configurations..."
+      sudo rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
+        $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/security/config/ \
+        /opt/docker_apps/2-applications/security/config/
+
+      sudo rm -f /var/run/ha-split-brain.lock
+      echo "FAILBACK COMPLETE & LOCK REMOVED! You may now start your primary containers."
+  when: "'primary_host' in group_names"
+
+- name: Deploy Automated HA Replication Script (Outward Sync)
   ansible.builtin.copy:
     dest: /opt/sync-to-standby.sh
     owner: root
@@ -133,6 +196,12 @@
       #!/bin/bash
       STANDBY="100.107.233.53"
       STANDBY_USER="mgmt"
+
+      # --- SPLIT-BRAIN LOCK CHECK ---
+      if [ -f "/var/run/ha-split-brain.lock" ]; then
+        echo "HA LOCK ACTIVE: Server recently rebooted. Sync aborted to prevent Split-Brain data loss."
+        exit 1
+      fi
 
       if docker ps | grep -q keycloak-db; then
         docker exec keycloak-db pg_dump -U keycloak keycloak > /tmp/kc-backup.sql
@@ -147,6 +216,10 @@
       rsync -avz --delete -e "ssh -o StrictHostKeyChecking=no" \
         /opt/docker_apps/2-applications/secrets/vault-data/ \
         $STANDBY_USER@$STANDBY:/opt/docker_apps/2-applications/secrets/vault-data/
+
+      rsync -avz --delete --rsync-path="sudo rsync" -e "ssh -o StrictHostKeyChecking=no" \
+        /var/lib/docker/volumes/sovereign-stack_n8n_data/_data/ \
+        $STANDBY_USER@$STANDBY:/var/lib/docker/volumes/sovereign-stack_n8n_data/_data/
   when: "'primary_host' in group_names"
 
 - name: Schedule Hourly Asynchronous Data Sync Cron Job
