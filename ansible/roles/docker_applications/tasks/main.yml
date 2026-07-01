@@ -183,6 +183,14 @@
         /opt/docker_apps/2-applications/security/config/
 
       sudo rm -f /var/run/ha-split-brain.lock
+      echo "Lock removed."
+
+      # --- ADD THESE LINES TO AUTOMATICALLY START EVERYTHING BACK UP ---
+      echo "Starting Primary containers..."
+      cd /home/mgmt/sovereign-stack/docker/2-applications/secrets && docker compose up -d
+      cd /home/mgmt/sovereign-stack/docker/2-applications/security && docker compose up -d
+      cd /home/mgmt/sovereign-stack/docker/2-applications/automation && docker compose up -d
+
       echo "FAILBACK COMPLETE & LOCK REMOVED! You may now start your primary containers."
   when: "'primary_host' in group_names"
 
