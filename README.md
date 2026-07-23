@@ -1,11 +1,44 @@
 # Sovereign Security Stack v2.0 — CHARif-LABS-INFRA
 
-> A self-hosted, Zero-Trust Security Operations (SecOps) platform built on Docker, Terraform, and Ansible.  
-> All services are exposed securely via Cloudflare Zero Trust Tunnels with Keycloak OIDC authentication.
+> A self-hosted, Zero-Trust Security Operations (SecOps) platform designed for comprehensive threat detection, identity management, and automated security workflows. Built on a robust stack of Docker, Terraform, and Ansible, all services are securely exposed via Cloudflare Zero Trust Tunnels with Keycloak OIDC authentication.
+
+---
+
+## 🌟 Introduction
+
+The CHARif-LABS-INFRA project provides a complete, self-hosted solution for modern security operations, empowering organizations to establish a strong security posture with a Zero-Trust approach. This platform integrates leading open-source and community-edition tools to deliver:
+
+-   **Centralized Identity and Access Management (IAM):** Secure authentication and authorization with Keycloak.
+-   **Extended Detection and Response (XDR):** Comprehensive security monitoring and threat detection with Wazuh.
+-   **Infrastructure as Code (IaC):** Automated provisioning and management of Cloudflare resources with Terraform.
+-   **Container Orchestration:** Efficient deployment and scaling of services using Docker and Docker Compose.
+-   **Configuration Management:** Baseline hardening and maintenance of Docker hosts with Ansible.
+-   **Observability:** Integrated monitoring and alerting with Prometheus and Grafana.
+-   **Secrets Management:** Secure storage and access to sensitive information with HashiCorp Vault.
+-   **Workflow Automation:** Streamlined security and operational tasks with n8n.
+
+This stack is designed to run on a single Linux Docker host, secured from the internet by Cloudflare Zero Trust Tunnels, eliminating the need for inbound firewall rules.
+
+---
+
+## ✨ Features
+
+-   **Zero Trust Architecture:** All external access secured via Cloudflare Zero Trust Tunnels, eliminating public inbound ports.
+-   **Identity-Centric Security:** Keycloak as the central Identity Provider (IdP) for all applications, enforcing OIDC-based authentication.
+-   **Comprehensive XDR:** Wazuh for endpoint security, log analysis, intrusion detection, and compliance monitoring.
+-   **Automated Infrastructure:** Terraform manages Cloudflare DNS, Tunnels, Access Policies, and Email Routing.
+-   **Modular Containerized Services:** Docker Compose orchestrates independent application stacks (Identity, Security, Observability, Automation, Secrets).
+-   **Secure Secrets Management:** HashiCorp Vault provides centralized, audited storage for sensitive data (localhost-bound).
+-   **Proactive Monitoring:** Prometheus and Grafana for real-time insights into system and application health.
+-   **Workflow Automation:** n8n for building automated workflows, integrating various services and responding to events.
+-   **CI/CD Pipeline:** GitHub Actions for automated security scanning, validation, version tagging, and Portainer-triggered deployments.
+-   **Host Hardening:** Ansible playbooks for establishing a secure baseline configuration on the Docker host.
 
 ---
 
 ## 🏗️ Architecture Overview
+
+The platform's architecture is built on a layered approach, with Cloudflare Zero Trust acting as the secure edge, protecting all internally hosted services.
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────────┐
@@ -49,6 +82,23 @@
 │              Managed via Ansible playbooks for baseline hardening           │
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## 🛠️ Technologies Used
+
+-   **Cloudflare Zero Trust:** Secure connectivity and access control.
+-   **Terraform:** Infrastructure as Code for Cloudflare resources.
+-   **Docker & Docker Compose:** Containerization and orchestration.
+-   **Ansible:** Configuration management for the Docker host.
+-   **Keycloak:** Open-source Identity and Access Management (IAM) and SSO.
+-   **Wazuh:** XDR platform for security monitoring, log analysis, and threat detection.
+-   **HashiCorp Vault:** Secrets management.
+-   **n8n:** Workflow automation tool.
+-   **Prometheus:** Monitoring system.
+-   **Grafana:** Data visualization and dashboarding.
+-   **PostgreSQL:** Database for Keycloak.
+-   **GitHub Actions:** CI/CD pipeline for automation.
 
 ---
 
@@ -110,89 +160,123 @@ charif-labs-infra/
 
 ---
 
-## 🚀 Quick Start
+## 🚀 Getting Started
 
-These are the high-level steps.  
-**For detailed, copy-paste instructions, see each guide in `docs/`.**
+These are the high-level steps to deploy the Sovereign Security Stack. **For detailed, copy-paste instructions, refer to the guides in the `docs/` directory.**
 
-### Phase 1 — Prerequisites
-1. A domain managed by Cloudflare (e.g. `charif-labs.tech`)
-2. A Linux host with Docker + Docker Compose installed
-3. Terraform CLI ≥ 1.5.0
-4. Ansible (for Docker host hardening & maintenance)
-5. A Gmail address for email-routing catch-all
+### Prerequisites
 
-### Phase 2 — Terraform (Cloudflare IaC)
-```bash
-cd terraform/
-terraform init
-terraform plan
-terraform apply
-```
-This creates:
-- A **Cloudflare Zero Trust Tunnel**
-- **DNS CNAME records** for all subdomains
-- **Email routing** catch-all rule
-- **Zero Trust Access Applications** protected by Keycloak OIDC
-- **Redirect rules** (e.g. `iam.` → Keycloak admin console)
+Before you begin, ensure you have the following:
 
-> 🔑 Copy the sensitive output `cloudflare_zero_trust_tunnel_cloudflared_token` — you will need it for Docker.
+-   **Cloudflare Account:** A domain registered and managed by Cloudflare.
+-   **Linux Host:** A dedicated Linux server (e.g., Ubuntu LTS) with Docker and Docker Compose installed.
+    -   **Minimum Specs:** 4 CPU cores, 8 GB RAM, 50 GB SSD.
+    -   **Network:** Outbound HTTPS (443) access only (no inbound ports required).
+-   **Terraform CLI:** Version 1.5.0 or newer.
+-   **Ansible:** For Docker host hardening and maintenance.
+-   **Gmail Address:** For Cloudflare Email Routing catch-all.
+-   **SSH Access:** To your Linux Docker host.
 
-### Phase 3 — Secrets & Environment Files
-Create the following files **locally** (never commit them):
+### Phase 1 — Terraform (Cloudflare IaC)
 
-**`docker/core-identity/keycloak/.env`** (or `docker/2-applications/identity/.env`)
-```bash
-KC_DB_PASSWORD=<strong_random_password>
-KC_ADMIN_PASSWORD=<strong_random_password>
-```
+1.  **Navigate to `terraform/`:**
+    ```bash
+    cd terraform/
+    ```
+2.  **Create `terraform.tfvars`:**
+    ```hcl
+    cloudflare_account_id = "your_account_id"
+    cloudflare_zone_id    = "your_zone_id"
+    cloudflare_api_token  = "your_api_token"
+    keycloak_client_secret = "placeholder-will-update-later" # Update later in Phase 5
+    forwarding_email       = "your-gmail@gmail.com"
+    admin_email            = "your-admin-email@gmail.com"
+    ms_verification_code   = "MS=msxxxxxxx" # Optional: For Microsoft domain verification
+    google_site_verification_code = "google-site-verification=..." # Optional: For Google domain verification
+    ```
+    *Replace placeholders with your actual Cloudflare credentials and email addresses. Refer to [02 — Terraform Cloudflare Setup](docs/02-Terraform-Cloudflare-Setup.md) for detailed instructions.*
+3.  **Initialize & Apply:**
+    ```bash
+    terraform init
+    terraform plan
+    terraform apply
+    ```
+    This provisions Cloudflare Zero Trust Tunnels, DNS records, Email routing, and initial Access Applications. **Copy the sensitive `cloudflare_zero_trust_tunnel_cloudflared_token` output.**
 
-**`terraform/terraform.tfvars`**
-```hcl
-cloudflare_account_id = "your_account_id"
-cloudflare_zone_id    = "your_zone_id"
-cloudflare_api_token  = "your_api_token"
-keycloak_client_secret = "will_be_generated_in_keycloak"
-```
+### Phase 2 — Docker Sovereign Stack
 
-### Phase 4 — Docker Stack
-```bash
-cd docker/
-docker network create sovereign_net
-docker compose up -d
-```
-This starts:
-- **Cloudflared** tunnel daemon (foundation)
-- **Portainer** CE for Docker management (foundation)
-- **PostgreSQL** database for Keycloak (identity)
-- **Keycloak** server (identity)
-- **HashiCorp Vault** for secrets management (secrets)
-- **n8n** workflow automation (automation)
-- **Wazuh** XDR platform (security)
-- **Prometheus + Grafana + Node Exporter** (observability)
+1.  **Create Shared Network:**
+    ```bash
+    cd docker/
+    docker network create sovereign_net
+    ```
+2.  **Configure Application Secrets:** Create `.env` files for Keycloak passwords and optionally for n8n basic auth and Cloudflared tunnel token.
+    ```bash
+    # For Keycloak (REQUIRED):
+    cat > docker/2-applications/identity/.env << 'EOF'
+    KC_DB_PASSWORD=<strong_random_password>
+    KC_ADMIN_PASSWORD=<strong_random_password>
+    EOF
 
-### Phase 5 — Keycloak Configuration
-1. Log in to `https://auth.charif-labs.tech/admin`
-2. Create a **realm** named `charif-labs`
-3. Create an **OIDC client** named `cloudflare-access`
-4. Add the `ztna_role` user attribute and map it to a claim
-5. Update `terraform.tfvars` with the generated **Client Secret**
-6. Re-run `terraform apply`
+    # For Cloudflared (REQUIRED, paste token from Phase 1 output):
+    cat > docker/1-foundation/cloudflared/.env << 'EOF'
+    TUNNEL_TOKEN="paste-your-base64-token-here"
+    EOF
+    ```
+    *Refer to [03 — Docker Sovereign Stack](docs/03-Docker-Sovereign-Stack.md) for full details.*
+3.  **Launch Docker Stack:**
+    ```bash
+    sudo docker compose --env-file ./2-applications/identity/.env \
+                         --env-file ./1-foundation/cloudflared/.env \
+                         up -d
+    ```
+    This starts all services, including Cloudflared, Keycloak, PostgreSQL, Portainer, Vault, n8n, Wazuh, Prometheus, and Grafana.
 
-### Phase 6 — Ansible Docker-Host Hardening
-```bash
-cd ansible/
-ansible-playbook -i inventory.ini exemple/NTP_Installed.yaml
-# Adapt and extend playbooks for your Docker host baseline
-```
+### Phase 3 — Keycloak Configuration
 
-> Ansible in this project targets the **Linux Docker host** for baseline hardening, maintenance, and package management — not Windows endpoints.
+1.  **Access Admin Console:** Log in to `https://keycloak-admin.your-domain.com` using `admin` and `KC_ADMIN_PASSWORD`.
+2.  **Create Realm:** Create a new realm named `charif-labs`.
+3.  **Configure OIDC Client:** Create a client named `cloudflare-access` with appropriate redirect URIs and web origins.
+4.  **Retrieve Client Secret:** Copy the generated `Client Secret` from Keycloak.
+5.  **Update Terraform:** Paste the `Client Secret` into `terraform/terraform.tfvars` and re-run `terraform apply`.
+6.  **User Attributes & Mappers:** Create a `ztna_role` user attribute and an OIDC mapper to include it in tokens.
+7.  **Create Users & Groups:** Create an `it-admin` group and an admin user, assigning them to the group and setting `ztna_role`.
 
-### Phase 7 — Verify Zero Trust Access
-Browse to each service and confirm Cloudflare Access prompts for Keycloak login:
-- `https://wazuh.charif-labs.tech`
-- `https://mgmt.charif-labs.tech`
-- `https://grafana.charif-labs.tech`
+*Refer to [04 — Keycloak Identity Provider](docs/04-Keycloak-Identity-Provider.md) for full details.*
+
+### Phase 4 — Wazuh XDR Deployment
+
+1.  **Access Dashboard:** Browse to `https://wazuh.your-domain.com` and log in with default credentials (`admin`/`SecretPassword`).
+2.  **Change Default Passwords:** **CRITICAL!** Update `INDEXER_PASSWORD`, `DASHBOARD_PASSWORD`, and `API_PASSWORD` in `docker/2-applications/security/docker-compose.yml` and restart the Wazuh stack. Update `internal_users.yml` and hash the new password within the `wazuh.indexer` container.
+
+*Refer to [05 — Wazuh XDR Deployment](docs/05-Wazuh-XDR-Deployment.md) for full details.*
+
+### Phase 5 — Ansible Docker-Host Management
+
+1.  **Configure `ansible/inventory.ini`:** Update with your Docker host's IP/hostname, SSH user, and private key path.
+2.  **Test Connectivity:**
+    ```bash
+    cd ansible/
+    ansible all -m ping -i inventory.ini
+    ```
+3.  **Run Example Playbooks:**
+    ```bash
+    ansible-playbook -i inventory.ini exemple/NTP_Installed.yaml
+    ```
+    Extend with additional playbooks for SSH hardening, firewall configuration, and other security baselines.
+
+*Refer to [06 — Ansible Docker-Host Management](docs/06-Ansible-Docker-Host-Management.md) for full details.*
+
+### Phase 6 — Verify Zero Trust Access
+
+Browse to each service and confirm Cloudflare Access prompts for Keycloak login, and that you can successfully authenticate with your configured `it-admin` user:
+
+-   `https://wazuh.your-domain.com`
+-   `https://mgmt.your-domain.com` (Portainer)
+-   `https://grafana.your-domain.com`
+-   `https://n8n.your-domain.com`
+
+*Refer to [07 — Zero Trust Access Configuration](docs/07-Zero-Trust-Access-Configuration.md) for full details.*
 
 ---
 
@@ -214,7 +298,7 @@ Browse to each service and confirm Cloudflare Access prompts for Keycloak login:
 ## 🔐 Security Model
 
 | Layer | Technology | Purpose |
-|-------|------------|---------|
+|-------|------------|---------|\
 | **Edge** | Cloudflare Zero Trust Tunnel | No open inbound ports on the host |
 | **Identity** | Keycloak OIDC | Centralized SSO & RBAC |
 | **Access** | Cloudflare Access Applications | Per-app policies (role-based) |
@@ -227,74 +311,91 @@ Browse to each service and confirm Cloudflare Access prompts for Keycloak login:
 
 ## 📖 Documentation
 
-Each doc is a standalone, step-by-step guide. Read them in order:
+Each document provides a standalone, step-by-step guide. It is recommended to read them in the following order:
 
-1. **[01 — Prerequisites & Architecture](docs/01-Prerequisites-and-Architecture.md)**  
-   Hardware, software, and Cloudflare account requirements.
-
-2. **[02 — Terraform Cloudflare Setup](docs/02-Terraform-Cloudflare-Setup.md)**  
-   Authenticate, plan, and apply the entire Cloudflare layer.
-
-3. **[03 — Docker Sovereign Stack](docs/03-Docker-Sovereign-Stack.md)**  
-   Install Docker, create the network, and launch all services.
-
-4. **[04 — Keycloak Identity Provider](docs/04-Keycloak-Identity-Provider.md)**  
-   Realm creation, client setup, user attributes, and Cloudflare IdP mapping.
-
-5. **[05 — Wazuh XDR Deployment](docs/05-Wazuh-XDR-Deployment.md)**  
-   SSL certificates, indexer configuration, dashboard access, and agent enrollment.
-
-6. **[06 — Ansible Docker-Host Management](docs/06-Ansible-Docker-Host-Management.md)**  
-   Inventory setup and playbooks for Linux Docker host baseline hardening.
-
-7. **[07 — Zero Trust Access Configuration](docs/07-Zero-Trust-Access-Configuration.md)**  
-   How Access Policies work, troubleshooting loops, and break-glass access.
-
-8. **[08 — GitHub Actions CI/CD](docs/08-GitHub-Actions-CI-CD.md)**  
-   Pipeline stages: secret scanning, validation, auto-tagging, and Portainer webhooks.
-
-9. **[09 — Maintenance and Troubleshooting](docs/09-Maintenance-and-Troubleshooting.md)**  
-   Common issues, log locations, restart procedures, and break-glass steps.
+1.  **[01 — Prerequisites & Architecture](docs/01-Prerequisites-and-Architecture.md)**: Hardware, software, and Cloudflare account requirements.
+2.  **[02 — Terraform Cloudflare Setup](docs/02-Terraform-Cloudflare-Setup.md)**: Authenticate, plan, and apply the entire Cloudflare layer.
+3.  **[03 — Docker Sovereign Stack](docs/03-Docker-Sovereign-Stack.md)**: Install Docker, create the network, and launch all services.
+4.  **[04 — Keycloak Identity Provider](docs/04-Keycloak-Identity-Provider.md)**: Realm creation, client setup, user attributes, and Cloudflare IdP mapping.
+5.  **[05 — Wazuh XDR Deployment](docs/05-Wazuh-XDR-Deployment.md)**: SSL certificates, indexer configuration, dashboard access, and agent enrollment.
+6.  **[06 — Ansible Docker-Host Management](docs/06-Ansible-Docker-Host-Management.md)**: Inventory setup and playbooks for Linux Docker host baseline hardening.
+7.  **[07 — Zero Trust Access Configuration](docs/07-Zero-Trust-Access-Configuration.md)**: How Access Policies work, troubleshooting loops, and break-glass access.
+8.  **[08 — GitHub Actions CI/CD](docs/08-GitHub-Actions-CI-CD.md)**: Pipeline stages: secret scanning, validation, auto-tagging, and Portainer webhooks.
+9.  **[09 — Maintenance and Troubleshooting](docs/09-Maintenance-and-Troubleshooting.md)**: Common issues, log locations, restart procedures, and break-glass steps.
 
 ---
 
 ## ⚠️ Important Notes
 
-- **Never commit secrets.** `.gitignore` already excludes `.env`, `*.tfvars`, and `terraform.tfstate`.
-- **Keycloak is in `start-dev` mode.** For production, switch to `start` with proper hostname settings and a reverse-proxy certificate.
-- **Wazuh default passwords** are hard-coded in `docker/2-applications/security/docker-compose.yml`. Rotate them before production use.
-- **Cloudflare tunnel token** is base64-encoded JSON. Treat it as sensitive as an API key.
-- **The `moved.tf` file** handles Terraform state migration from Cloudflare provider v4 to v5. Do not delete it if you have existing state.
-- **Vault is bound to localhost only.** It is intentionally not exposed through the Cloudflare tunnel. Access it via `ssh -L 8200:localhost:8200 <host>`.
-- **Ansible targets the Docker host.** All playbooks are designed for the Linux server running Docker, not for remote Windows endpoints.
+-   **Never commit secrets.** `.gitignore` already excludes `.env`, `*.tfvars`, and `terraform.tfstate`.
+-   **Keycloak is in `start-dev` mode.** For production, switch to `start` with proper hostname settings and a reverse-proxy certificate.
+-   **Wazuh default passwords** are hard-coded in `docker/2-applications/security/docker-compose.yml`. **Rotate them immediately before production use.**
+-   **Cloudflare tunnel token** is base64-encoded JSON. Treat it as sensitive as an API key.
+-   **The `moved.tf` file** handles Terraform state migration from Cloudflare provider v4 to v5. Do not delete it if you have existing state.
+-   **Vault is bound to localhost only.** It is intentionally not exposed through the Cloudflare tunnel. Access it via `ssh -L 8200:localhost:8200 <host>`.
+-   **Ansible targets the Docker host.** All playbooks are designed for the Linux server running Docker, not for remote Windows endpoints.
+-   **Wazuh Agent Deployment:** Wazuh agents are deployed and managed on endpoints via Action1, not Ansible.
 
 ---
 
-## 🛠️ Maintenance Commands
+## 🛠️ Maintenance & Troubleshooting
 
-```bash
-# View all running containers
-docker compose -f docker/docker-compose.yml ps
+### General Docker Commands
 
-# Restart the entire stack
-docker compose -f docker/docker-compose.yml restart
+-   **View all running containers:** `docker compose -f docker/docker-compose.yml ps`
+-   **Restart the entire stack:** `docker compose -f docker/docker-compose.yml restart`
+-   **View Cloudflared logs:** `docker logs cloudflared-tunnel --follow`
+-   **Restart individual application stack:** `docker compose -f docker/2-applications/security/docker-compose.yml restart`
+-   **Update all Docker images:**
+    ```bash
+    cd docker/
+    sudo docker compose pull
+    sudo docker compose up -d --remove-orphans
+    ```
 
-# View Cloudflared logs
-docker logs cloudflared-tunnel --follow
+### Terraform Maintenance
 
-# Re-apply Terraform after changing variables
-terraform -chdir=terraform apply
+-   **Re-apply Terraform after changing variables:** `terraform -chdir=terraform apply`
+-   **Backup Terraform state:** `cp terraform.tfstate terraform.tfstate.backup.$(date +%s)`
 
-# Restart individual application stack
-docker compose -f docker/2-applications/security/docker-compose.yml restart
-```
+### Common Issues
+
+-   **Cloudflared: "Token not provided"**: Verify `TUNNEL_TOKEN` environment variable or `docker/1-foundation/cloudflared/.env`.
+-   **Keycloak: Database not reachable**: If Keycloak PostgreSQL volume is corrupted, consider wiping `keycloak_database` volume (use with caution).
+-   **Wazuh Dashboard: "Wazuh dashboard server is not ready yet"**: Wait a few minutes for services to initialize; check indexer logs if persistent.
+-   **Authentication Loop**: Ensure `auth.your-domain.com` has a `bypass` policy in Cloudflare Access and Keycloak client redirect URIs are correct.
+-   **403 Forbidden / Access Denied**: Check Keycloak user groups/roles and Cloudflare Zero Trust Audit Logs (`Zero Trust` → `Access` → `Audit Logs`).
+
+*For more detailed troubleshooting, refer to [09 — Maintenance and Troubleshooting](docs/09-Maintenance-and-Troubleshooting.md).*
+
+---
+
+## 🤝 Contributing
+
+This project is maintained for the CHARif-LABS-INFRA PFE. While direct contributions are not expected for the final submission, the following general guidelines apply for any future development or extensions:
+
+1.  **Fork the Repository:** Start by forking this repository.
+2.  **Create a New Branch:** For each feature or bug fix, create a new branch (e.g., `feature/new-service`, `bugfix/wazuh-password`).
+3.  **Adhere to Best Practices:**
+    -   Follow existing code styles for Terraform, Docker Compose, and Ansible.
+    -   Ensure all changes are well-documented.
+    -   Update `docs/` files relevant to your changes.
+    -   Test your changes thoroughly.
+4.  **Open Pull Requests:** Submit pull requests to the `main` branch with a clear description of your changes.
 
 ---
 
 ## 📜 License
 
-This infrastructure template is provided as-is for educational and self-hosted security operations.  
-Review and harden all default credentials before deploying to a production environment.
+This infrastructure template is provided as-is for educational and self-hosted security operations during the PFE. Review and harden all default credentials before deploying to a production environment.
+
+---
+
+## 📧 Contact
+
+For any questions, issues, or inquiries regarding this project, please open an issue on the GitHub repository or contact the project maintainers:
+
+-   **[Charif LABS Infrastructure Team]** - `contact@charif-labs.tech`
 
 ---
 
