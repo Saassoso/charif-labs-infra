@@ -1,0 +1,1494 @@
+{
+  "name": "JML - User/Grp",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "jml-trigger",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        208,
+        576
+      ],
+      "id": "53b49b06-b912-445d-95bb-d5b8dfc21fb2",
+      "name": "Webhook1",
+      "webhookId": "jml-webhook-001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b1",
+              "leftValue": "={{ $json.body.type }}",
+              "rightValue": "USER-CREATE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b2",
+              "leftValue": "={{ $json.body.type }}",
+              "rightValue": "USER-UPDATE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b3",
+              "leftValue": "={{ $json.body.type }}",
+              "rightValue": "USER-DELETE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b4",
+              "leftValue": "={{ $json.body.type }}",
+              "rightValue": "GROUP_MEMBERSHIP-CREATE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "b5",
+              "leftValue": "={{ $json.body.type }}",
+              "rightValue": "GROUP_MEMBERSHIP-DELETE",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "9f26fa34-5b8f-49b3-96cd-3c2db8d2e708",
+      "name": "Bouncer",
+      "type": "n8n-nodes-base.filter",
+      "typeVersion": 2.3,
+      "position": [
+        432,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "for (const item of $input.all()) {\n  // ── 1. Parse the representation payload ──────────────────────\n  if (item.json.body && item.json.body.representation) {\n    try { item.json.userData = JSON.parse(item.json.body.representation); }\n    catch (e) { item.json.userData = {}; }\n  } else {\n    item.json.userData = {};\n  }\n\n  // ── 2. Extract email ──────────────────────────────────────────\n  const u = item.json.userData;\n  const email = u.email || u.username || '';\n  item.json.userEmail  = email;\n  item.json.emailDomain = email.includes('@') ? email.split('@')[1] : '';\n\n  // ── 3. Domain flags & Delete Event Override ───────────────────\n  const emailStr = email.toLowerCase();\n  const isItAdmin = emailStr.startsWith('it-admin') || emailStr.startsWith('admin');\n\n  // Initialize specific target emails\n  item.json.googleTargetEmail = email;\n  item.json.entraTargetEmail = email;\n\n  if (item.json.body.type === 'USER-DELETE' && !email.includes('@')) {\n    // If Keycloak deletes a user and strips the domain, route to BOTH platforms\n    item.json.isGoogleDomain = true;\n    item.json.isEntraDomain = true;\n    // Construct the proper emails so the APIs know who to suspend\n    item.json.googleTargetEmail = email + '@charif-labs.tech';\n    item.json.entraTargetEmail = email + '@ms.charif-labs.tech';\n  } else if (isItAdmin) {\n    item.json.isGoogleDomain = true;\n    item.json.isEntraDomain = true;\n  } else {\n    item.json.isGoogleDomain = (item.json.emailDomain === 'charif-labs.tech');\n    item.json.isEntraDomain  = (item.json.emailDomain === 'ms.charif-labs.tech');\n  }\n\n  // ── 4. Extract Keycloak user ID & Group UUID ──────────────────\n  item.json.keycloakUserId = null;\n  item.json.groupId = null;\n\n  if (item.json.body && item.json.body.resourcePath) {\n    const parts = item.json.body.resourcePath.split('/');\n    if (parts[0] === 'users' && parts.length > 1) {\n      item.json.keycloakUserId = parts[1];\n    }\n    if (item.json.body.type && item.json.body.type.includes('GROUP_MEMBERSHIP') && parts.length > 3) {\n      item.json.groupId = parts[3];\n    }\n  }\n\n  // ── 5. Extract Group Path from User Creation ──────────────────\n  item.json.groupPath = '';\n  if (u.groups && Array.isArray(u.groups) && u.groups.length > 0) {\n    item.json.groupPath = u.groups[0]; \n  }\n}\nreturn $input.all();"
+      },
+      "id": "81d440f1-5b64-4ed4-aa16-d6f827bb6ee9",
+      "name": "Parser",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "sw1",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "USER-CREATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Joiner"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "sw2",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "USER-UPDATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Mover (User)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "sw3",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "USER-DELETE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Leaver"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "sw4",
+                    "leftValue": "={{ $json.body.type }}",
+                    "rightValue": "GROUP_MEMBERSHIP",
+                    "operator": {
+                      "type": "string",
+                      "operation": "contains"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Mover (Group-IN)"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "8dc801cc-6593-4b93-a8b9-fb3a6a574385",
+      "name": "JML Router",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        928,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifcg",
+              "leftValue": "={{ $json.isGoogleDomain }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "123f6b48-14a8-4395-94ba-7e57c7042ede",
+      "name": "Domain: Joiner",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1168,
+        -464
+      ]
+    },
+    {
+      "parameters": {
+        "firstName": "={{ $json.userData.firstName }}",
+        "lastName": "={{ $json.userData.lastName }}",
+        "password": "={{ $json.tempPassword }}",
+        "username": "={{ $json.userEmail.split('@')[0] }}",
+        "domain": "charif-labs.tech",
+        "additionalFields": {
+          "changePasswordAtNextLogin": true
+        }
+      },
+      "id": "b7f84fed-2d35-4aee-969d-76415cd4dfc6",
+      "name": "Google Create User",
+      "type": "n8n-nodes-base.gSuiteAdmin",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        -480
+      ],
+      "credentials": {
+        "gSuiteAdminOAuth2Api": {
+          "id": "hRIuuQkeIO5gZweR",
+          "name": "Google Workspace Admin account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "userId": {
+          "__rl": true,
+          "value": "={{ $json.userEmail }}",
+          "mode": "userEmail"
+        },
+        "updateFields": {
+          "firstName": "={{ $json.userData.firstName }}",
+          "lastName": "={{ $json.userData.lastName }}"
+        }
+      },
+      "id": "fe4a6d74-079b-4642-b9a2-fa6aa1339007",
+      "name": "Google Update (409 Fallback)",
+      "type": "n8n-nodes-base.gSuiteAdmin",
+      "typeVersion": 1,
+      "position": [
+        2400,
+        -464
+      ],
+      "credentials": {
+        "gSuiteAdminOAuth2Api": {
+          "id": "hRIuuQkeIO5gZweR",
+          "name": "Google Workspace Admin account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "displayName": "={{ $json.userData.firstName }} {{ $json.userData.lastName }}",
+        "userPrincipalName": "={{ $json.userEmail }}",
+        "mailNickname": "={{ $json.userEmail.split('@')[0] }}",
+        "password": "={{ $json.tempPassword }}",
+        "additionalFields": {
+          "forceChangePassword": "forceChangePasswordNextSignIn"
+        },
+        "requestOptions": {}
+      },
+      "id": "fbe6f74a-d206-4888-b793-6078bb78f03d",
+      "name": "Entra Create User",
+      "type": "n8n-nodes-base.microsoftEntra",
+      "typeVersion": 1,
+      "position": [
+        1776,
+        -272
+      ],
+      "credentials": {
+        "microsoftEntraOAuth2Api": {
+          "id": "tCssNk3LEs23QSNS",
+          "name": "Microsoft Entra ID (Azure Active Directory) account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "user": {
+          "__rl": true,
+          "value": "={{ $json.userEmail }}",
+          "mode": "id"
+        },
+        "updateFields": {
+          "accountEnabled": true,
+          "displayName": "={{ $json.userData.firstName }} {{ $json.userData.lastName }}"
+        },
+        "requestOptions": {}
+      },
+      "id": "bae5a35f-3132-47cf-83d5-48c2cafa1e92",
+      "name": "Entra Update (409 Fallback)",
+      "type": "n8n-nodes-base.microsoftEntra",
+      "typeVersion": 1,
+      "position": [
+        2432,
+        -256
+      ],
+      "credentials": {
+        "microsoftEntraOAuth2Api": {
+          "id": "tCssNk3LEs23QSNS",
+          "name": "Microsoft Entra ID (Azure Active Directory) account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifug",
+              "leftValue": "={{ $json.isGoogleDomain }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "2ebc5b96-2a29-468b-b7cb-9d319a56507e",
+      "name": "Domain: Mover",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1392,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "userId": {
+          "__rl": true,
+          "value": "={{ $json.userEmail }}",
+          "mode": "userEmail"
+        },
+        "updateFields": {
+          "suspendUi": "={{ !$json.userData.enabled }}",
+          "firstName": "={{ $json.userData.firstName }}",
+          "lastName": "={{ $json.userData.lastName }}"
+        }
+      },
+      "id": "92f7166d-8992-4be3-99e4-84e94c71661a",
+      "name": "Google Update User",
+      "type": "n8n-nodes-base.gSuiteAdmin",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        160
+      ],
+      "credentials": {
+        "gSuiteAdminOAuth2Api": {
+          "id": "hRIuuQkeIO5gZweR",
+          "name": "Google Workspace Admin account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "user": {
+          "__rl": true,
+          "value": "={{ $json.userEmail }}",
+          "mode": "id"
+        },
+        "updateFields": {
+          "accountEnabled": "={{ $json.userData.enabled }}",
+          "displayName": "={{ $json.userData.firstName }} {{ $json.userData.lastName }}"
+        },
+        "requestOptions": {}
+      },
+      "id": "a55d17e3-1ae9-4b79-a774-34124fbe888c",
+      "name": "Entra Update User",
+      "type": "n8n-nodes-base.microsoftEntra",
+      "typeVersion": 1,
+      "position": [
+        1808,
+        352
+      ],
+      "credentials": {
+        "microsoftEntraOAuth2Api": {
+          "id": "tCssNk3LEs23QSNS",
+          "name": "Microsoft Entra ID (Azure Active Directory) account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifdg",
+              "leftValue": "={{ $json.isGoogleDomain }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "34710a7d-91c9-4819-98b2-8b2bf4373e28",
+      "name": "Domain: Leaver",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1264,
+        1008
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "userId": {
+          "__rl": true,
+          "value": "={{ $json.googleTargetEmail }}",
+          "mode": "userEmail"
+        },
+        "updateFields": {
+          "suspendUi": true
+        }
+      },
+      "id": "a5e3c7de-2a52-4724-8d18-bc71481840db",
+      "name": "Google Suspend User",
+      "type": "n8n-nodes-base.gSuiteAdmin",
+      "typeVersion": 1,
+      "position": [
+        1744,
+        992
+      ],
+      "credentials": {
+        "gSuiteAdminOAuth2Api": {
+          "id": "hRIuuQkeIO5gZweR",
+          "name": "Google Workspace Admin account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "user": {
+          "__rl": true,
+          "value": "={{ $json.entraTargetEmail }}",
+          "mode": "id"
+        },
+        "updateFields": {
+          "accountEnabled": false
+        },
+        "requestOptions": {}
+      },
+      "id": "921aa475-a32d-42a3-ae16-853994530124",
+      "name": "Entra Disable User",
+      "type": "n8n-nodes-base.microsoftEntra",
+      "typeVersion": 1,
+      "position": [
+        1760,
+        1248
+      ],
+      "credentials": {
+        "microsoftEntraOAuth2Api": {
+          "id": "tCssNk3LEs23QSNS",
+          "name": "Microsoft Entra ID (Azure Active Directory) account"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "url": "=https://auth.charif-labs.tech/admin/realms/charif-labs/users/{{ $json.keycloakUserId }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "oAuth2Api",
+        "options": {}
+      },
+      "id": "1d0a505b-820b-4cd0-a733-d24eb3bc219f",
+      "name": "Get KC User (Group)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2816,
+        624
+      ],
+      "credentials": {
+        "oAuth2Api": {
+          "id": "UNGNX0EvZrgvRSK1",
+          "name": "keycloak Client Credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifgar",
+              "leftValue": "={{ $('Parser').item.json.body.type }}",
+              "rightValue": "=CREATE",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "9add0798-b2f8-4353-8985-908b1e2fa57b",
+              "leftValue": "={{ $('Parser').item.json.body.type }}",
+              "rightValue": "UPDATE",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "looseTypeValidation": "=",
+        "options": {}
+      },
+      "id": "9b0daa6f-69f7-447f-b623-eeeef602ff15",
+      "name": "Group Add or Remove",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3552,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifgnca",
+              "leftValue": "={{ $('Parser').item.json.groupId === 'ebad6de7-1f9f-43f9-8cf0-a7dd8dcaeb08' || $('Parser').item.json.groupPath === '/IT' ? 'it@charif-labs.tech' : 'basic@charif-labs.tech' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0e22369c-244e-41be-b10c-28baa53f3487",
+      "name": "Google Group Null Check (Add)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3856,
+        176
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifgncr",
+              "leftValue": "={{ $('Parser').item.json.groupId === 'ebad6de7-1f9f-43f9-8cf0-a7dd8dcaeb08' || $('Parser').item.json.groupPath === '/IT' ? 'it@charif-labs.tech' : 'basic@charif-labs.tech' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "dc4b66a7-9c90-4754-9df7-b7b8ebdf752a",
+      "name": "Google Group Null Check (Remove)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3872,
+        384
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\n\nconst kcId = item.json.keycloakUserId || \"00000\";\nconst suffix = kcId.substring(0, 5);\nitem.json.tempPassword = `Welcome2Charif-labs-${suffix}`;\n\nreturn [item];"
+      },
+      "id": "c7ec515d-971d-4c5c-be1b-99844de4a234",
+      "name": "Generate Temp Password1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        -480
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const item = $input.first();\n\nconst kcId = item.json.keycloakUserId || \"00000\";\nconst suffix = kcId.substring(0, 5);\nitem.json.tempPassword = `Welcome2Charif-labs-${suffix}`;\n\nreturn [item];"
+      },
+      "id": "7cefce59-1961-4962-9ced-fa7c2b4851f4",
+      "name": "Generate Temp Password",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1472,
+        -272
+      ]
+    },
+    {
+      "parameters": {
+        "height": 672,
+        "width": 2000
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        912,
+        -688
+      ],
+      "typeVersion": 1,
+      "id": "a385d000-cd9e-4001-864e-870f5dbd1597",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "height": 592,
+        "width": 1104,
+        "color": 5
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        64,
+        320
+      ],
+      "typeVersion": 1,
+      "id": "6d7eb6f7-4c40-429e-94b3-f73ebb2beb60",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "operation": "addToGroup",
+        "userId": {
+          "__rl": true,
+          "value": "={{ $('Parser').item.json.userEmail }}",
+          "mode": "userEmail"
+        },
+        "groupId": {
+          "__rl": true,
+          "value": "={{ $('Parser').item.json.groupId === 'ebad6de7-1f9f-43f9-8cf0-a7dd8dcaeb08' || $('Parser').item.json.groupPath === '/IT' ? 'it@charif-labs.tech' : 'basic@charif-labs.tech' }}",
+          "mode": "groupId"
+        }
+      },
+      "type": "n8n-nodes-base.gSuiteAdmin",
+      "typeVersion": 1,
+      "position": [
+        4144,
+        112
+      ],
+      "id": "da1c17f4-853f-4677-9062-2b5422a9c903",
+      "name": "Add user to group",
+      "credentials": {
+        "gSuiteAdminOAuth2Api": {
+          "id": "hRIuuQkeIO5gZweR",
+          "name": "Google Workspace Admin account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "removeFromGroup",
+        "userId": {
+          "__rl": true,
+          "value": "={{ $('Parser').item.json.userEmail }}",
+          "mode": "userEmail"
+        },
+        "groupId": {
+          "__rl": true,
+          "value": "={{ $('Parser').item.json.groupId === 'ebad6de7-1f9f-43f9-8cf0-a7dd8dcaeb08' || $('Parser').item.json.groupPath === '/IT' ? 'it@charif-labs.tech' : 'basic@charif-labs.tech' }}",
+          "mode": "groupId"
+        }
+      },
+      "type": "n8n-nodes-base.gSuiteAdmin",
+      "typeVersion": 1,
+      "position": [
+        4160,
+        352
+      ],
+      "id": "08c6b713-c74e-44a5-9964-55d3a0dd9d61",
+      "name": "Remove user from group",
+      "credentials": {
+        "gSuiteAdminOAuth2Api": {
+          "id": "hRIuuQkeIO5gZweR",
+          "name": "Google Workspace Admin account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifgar",
+              "leftValue": "={{ $('Parser').item.json.body.type }}",
+              "rightValue": "=CREATE",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            },
+            {
+              "id": "4080167f-bb68-48d9-bcda-c0a1562e36a0",
+              "leftValue": "={{ $('Parser').item.json.body.type }}",
+              "rightValue": "UPDATE",
+              "operator": {
+                "type": "string",
+                "operation": "contains"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "5b16d0a9-cb49-4af7-b4a1-c2c20eeb3945",
+      "name": "Group Entra Add or Remove",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3584,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifgnca",
+              "leftValue": "={{ $('Parser').item.json.groupId === 'ebad6de7-1f9f-43f9-8cf0-a7dd8dcaeb08' || $('Parser').item.json.groupPath === '/IT' ? '4660cc7a-aa46-494a-a462-327f7e168fc0' : $('Parser').item.json.groupId === 'f5f55461-1fe9-409e-9e8a-f5c8855dabf5' || $('Parser').item.json.groupPath === '/Bureau 2/Developers' ? 'cf56b3ec-647a-495f-9d3c-62531d110892' : '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "1b83e1ec-a241-4568-9bbd-73d2b06e9531",
+      "name": "Entra Group Null Check (Add)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3904,
+        576
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifgncr",
+              "leftValue": "={{ $('Parser').item.json.groupId === 'ebad6de7-1f9f-43f9-8cf0-a7dd8dcaeb08' || $('Parser').item.json.groupPath === '/IT' ? '4660cc7a-aa46-494a-a462-327f7e168fc0' : $('Parser').item.json.groupId === 'f5f55461-1fe9-409e-9e8a-f5c8855dabf5' || $('Parser').item.json.groupPath === '/Bureau 2/Developers' ? 'cf56b3ec-647a-495f-9d3c-62531d110892' : '' }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "cf0690ee-0341-46ff-9acd-efa805907d79",
+      "name": "Entra Group Null Check (Remove)",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3872,
+        736
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "removeGroup",
+        "group": {
+          "__rl": true,
+          "value": "={{ $json.targetEntraGroupId }}",
+          "mode": "id"
+        },
+        "user": {
+          "__rl": true,
+          "value": "={{ $('Parser').item.json.groupId === 'ebad6de7-1f9f-43f9-8cf0-a7dd8dcaeb08' || $('Parser').item.json.groupPath === '/IT' ? '4660cc7a-aa46-494a-a462-327f7e168fc0' : $('Parser').item.json.groupId === 'f5f55461-1fe9-409e-9e8a-f5c8855dabf5' || $('Parser').item.json.groupPath === '/Bureau 2/Developers' ? 'cf56b3ec-647a-495f-9d3c-62531d110892' : '' }}",
+          "mode": "id"
+        },
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.microsoftEntra",
+      "typeVersion": 1,
+      "position": [
+        4160,
+        720
+      ],
+      "id": "5814f5b2-1c96-41cf-9def-e9e4129b9e47",
+      "name": "Remove Entra user from group",
+      "credentials": {
+        "microsoftEntraOAuth2Api": {
+          "id": "tCssNk3LEs23QSNS",
+          "name": "Microsoft Entra ID (Azure Active Directory) account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "addGroup",
+        "group": {
+          "__rl": true,
+          "value": "={{ $json.targetEntraGroupId }}",
+          "mode": "id"
+        },
+        "user": {
+          "__rl": true,
+          "value": "={{ $('Parser').item.json.groupId === 'ebad6de7-1f9f-43f9-8cf0-a7dd8dcaeb08' || $('Parser').item.json.groupPath === '/IT' ? '4660cc7a-aa46-494a-a462-327f7e168fc0' : $('Parser').item.json.groupId === 'f5f55461-1fe9-409e-9e8a-f5c8855dabf5' || $('Parser').item.json.groupPath === '/Bureau 2/Developers' ? 'cf56b3ec-647a-495f-9d3c-62531d110892' : '' }}",
+          "mode": "id"
+        },
+        "requestOptions": {}
+      },
+      "type": "n8n-nodes-base.microsoftEntra",
+      "typeVersion": 1,
+      "position": [
+        4176,
+        544
+      ],
+      "id": "46bceea4-bb42-4121-ac55-f5d5eaa1cf1d",
+      "name": "Add Entra user from group",
+      "credentials": {
+        "microsoftEntraOAuth2Api": {
+          "id": "tCssNk3LEs23QSNS",
+          "name": "Microsoft Entra ID (Azure Active Directory) account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifug",
+              "leftValue": "={{ $json.isEntraDomain }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "c1c54910-abd3-4ac1-9ff4-2bb8c7e71f33",
+      "name": "Domain: Mover1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1392,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifcg",
+              "leftValue": "={{ $json.isEntraDomain }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "323c80ce-affa-4ca6-b59b-5f8ee5a10312",
+      "name": "Domain Entra: Joiner",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1184,
+        -256
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ifdg",
+              "leftValue": "={{ $json.isEntraDomain }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "d613a519-6bae-49eb-bc72-e4034db05e28",
+      "name": "Domain: Leaver2",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        1280,
+        1264
+      ]
+    },
+    {
+      "parameters": {
+        "height": 576,
+        "width": 960
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1216,
+        64
+      ],
+      "typeVersion": 1,
+      "id": "89191411-b954-48b6-8ccb-d3526f056abd",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "height": 512,
+        "width": 976,
+        "color": "#DB8A8A"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1152,
+        944
+      ],
+      "typeVersion": 1,
+      "id": "4e4e96c1-f345-4f55-b53a-2543bfc7e1a7",
+      "name": "Sticky Note3"
+    }
+  ],
+  "pinData": {
+    "Webhook1": [
+      {
+        "json": {
+          "headers": {
+            "accept": "application/json",
+            "content-type": "application/json; charset=utf-8",
+            "content-length": "582",
+            "host": "sovereign-stack-n8n-1:5678",
+            "connection": "Keep-Alive",
+            "accept-encoding": "gzip",
+            "user-agent": "okhttp/4.12.0"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "type": "USER-CREATE",
+            "realmId": "937169e3-8a3b-4c2f-90e2-ac8a541f0e3b",
+            "id": "d4981a1d-b7cd-41cb-ac2d-efe744dc3a48",
+            "time": 1778856087813,
+            "clientId": "cdbf2b69-9f6e-4146-b13c-6bcafe6b68e4",
+            "userId": "2a0dd8bd-7e5e-447d-b442-c9016abd8eb4",
+            "ipAddress": "105.159.248.207",
+            "resourcePath": "users/6f4a5ad3-c976-48bf-8749-d0835f91d03f",
+            "representation": "{\"username\":\"compta-01\",\"firstName\":\"compta\",\"lastName\":\"01\",\"email\":\"compta-01@ms.charif-labs.tech\",\"emailVerified\":true,\"attributes\":{},\"enabled\":true,\"requiredActions\":[],\"groups\":[\"/Bureau 2/Comptabilite\"]}"
+          },
+          "webhookUrl": "https://n8n.charif-labs.tech/webhook/jml-trigger",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook1": {
+      "main": [
+        [
+          {
+            "node": "Bouncer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Bouncer": {
+      "main": [
+        [
+          {
+            "node": "Parser",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parser": {
+      "main": [
+        [
+          {
+            "node": "JML Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JML Router": {
+      "main": [
+        [
+          {
+            "node": "Domain: Joiner",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Domain Entra: Joiner",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Domain: Mover",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Domain: Mover1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Domain: Leaver",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Domain: Leaver2",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Get KC User (Group)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domain: Joiner": {
+      "main": [
+        [
+          {
+            "node": "Generate Temp Password1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Google Create User": {
+      "main": [
+        [
+          {
+            "node": "Group Add or Remove",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Update (409 Fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entra Create User": {
+      "main": [
+        [
+          {
+            "node": "Group Entra Add or Remove",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Entra Update (409 Fallback)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domain: Mover": {
+      "main": [
+        [
+          {
+            "node": "Google Update User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Domain: Leaver": {
+      "main": [
+        [
+          {
+            "node": "Google Suspend User",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get KC User (Group)": {
+      "main": [
+        [
+          {
+            "node": "Group Add or Remove",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Group Entra Add or Remove",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Add or Remove": {
+      "main": [
+        [
+          {
+            "node": "Google Group Null Check (Add)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Google Group Null Check (Remove)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Group Null Check (Add)": {
+      "main": [
+        [
+          {
+            "node": "Add user to group",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Google Group Null Check (Remove)": {
+      "main": [
+        [
+          {
+            "node": "Remove user from group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Temp Password1": {
+      "main": [
+        [
+          {
+            "node": "Google Create User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Temp Password": {
+      "main": [
+        [
+          {
+            "node": "Entra Create User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Update User": {
+      "main": [
+        [
+          {
+            "node": "Get KC User (Group)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entra Update User": {
+      "main": [
+        [
+          {
+            "node": "Get KC User (Group)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Update (409 Fallback)": {
+      "main": [
+        [
+          {
+            "node": "Group Add or Remove",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entra Update (409 Fallback)": {
+      "main": [
+        [
+          {
+            "node": "Group Entra Add or Remove",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Entra Add or Remove": {
+      "main": [
+        [
+          {
+            "node": "Entra Group Null Check (Add)",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Entra Group Null Check (Remove)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entra Group Null Check (Add)": {
+      "main": [
+        [
+          {
+            "node": "Add Entra user from group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Entra Group Null Check (Remove)": {
+      "main": [
+        [
+          {
+            "node": "Remove Entra user from group",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Add user to group": {
+      "main": [
+        []
+      ]
+    },
+    "Domain: Mover1": {
+      "main": [
+        [
+          {
+            "node": "Entra Update User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domain Entra: Joiner": {
+      "main": [
+        [
+          {
+            "node": "Generate Temp Password",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domain: Leaver2": {
+      "main": [
+        [
+          {
+            "node": "Entra Disable User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "8cedc81f-db17-4362-a335-dc012a048863",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "44ab87af680df026be25e7824704255cdf1f8c9a1380bbe190e036a3d0ff159d"
+  },
+  "id": "2rLbjtvy6juMgSQI",
+  "tags": [
+    {
+      "updatedAt": "2026-05-14T10:14:34.274Z",
+      "createdAt": "2026-05-14T10:14:34.274Z",
+      "id": "TspRayJuze9PVEPv",
+      "name": "JML"
+    }
+  ]
+}

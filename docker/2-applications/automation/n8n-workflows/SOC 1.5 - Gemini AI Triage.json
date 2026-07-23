@@ -1,0 +1,1204 @@
+{
+  "name": "SOC 1.5 - Gemini AI Triage",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "=wazuh-ai",
+        "authentication": "headerAuth",
+        "responseMode": "=onReceived",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -304,
+        16
+      ],
+      "id": "5b4d553a-756d-4cf0-a4df-d1fa687e69c4",
+      "name": "Webhook",
+      "webhookId": "cf269be1-79e7-4ffd-8e8c-a69ccc3d0760",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "3C4PRPAnPlVrixl9",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "secretPath": "n8n/soar/wazuh_indexer",
+        "version": 1,
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-hashi-vault.hashiCorpVault",
+      "typeVersion": 1,
+      "position": [
+        592,
+        128
+      ],
+      "id": "2cae39c4-b049-4fa2-8481-49bc57b5dc07",
+      "name": "HashiCorp Vault",
+      "credentials": {
+        "hashiCorpVaultApi": {
+          "id": "TLB3kKGjHm6SO66z",
+          "name": "HashiCorp Vault"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 2: Normalize incoming Wazuh alert into a flat, predictable object.\n// Handles both Windows (data.win.system) and Linux/SYSLOG alert structures.\n\nconst raw = $input.first().json;\n\n// --- Field Extraction with safe fallbacks ---\nconst hostName =\n  raw?.data?.win?.system?.computer ||\n  raw?.agent?.name ||\n  raw?.data?.srcip ||   // fallback for network device alerts\n  'UNKNOWN_HOST';\n\nconst agentId   = raw?.agent?.id     || '000';\nconst ruleId    = raw?.rule?.id      || '0';\nconst ruleLevel = parseInt(raw?.rule?.level || '0', 10);\nconst ruleDesc  = raw?.rule?.description || 'No description';\n\n// Source IP — check multiple common locations\nconst srcIp =\n  raw?.data?.win?.eventdata?.ipAddress ||\n  raw?.data?.srcip ||\n  raw?.data?.src_ip ||\n  raw?.network?.sourceIp ||\n  null;\n\n// Destination IP\nconst dstIp =\n  raw?.data?.win?.eventdata?.ipport?.split(':')[0] ||\n  raw?.data?.dstip ||\n  null;\n\n// MITRE ATT&CK mapping (present in Wazuh 4.x+)\nconst mitreTechnique = raw?.rule?.mitre?.technique?.[0] || null;\nconst mitreTactic    = raw?.rule?.mitre?.tactic?.[0]    || null;\n\nconst alertId    = raw?.id || `manual-${Date.now()}`;\nconst alertTime  = raw?.timestamp || new Date().toISOString();\nconst fullGroups = raw?.rule?.groups || [];\n\nreturn [{\n  json: {\n    // Pass raw alert through for LLM context\n    rawAlert: raw,\n    // Normalized fields for downstream logic\n    normalized: {\n      alertId,\n      alertTime,\n      hostName,\n      agentId,\n      ruleId,\n      ruleLevel,\n      ruleDesc,\n      srcIp,\n      dstIp,\n      mitreTechnique,\n      mitreTactic,\n      ruleGroups: fullGroups,\n      dedupeKey: `${hostName}:${ruleId}`,\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        16
+      ],
+      "id": "59a5d8ef-e3f3-4c70-aef8-71558ebb040e",
+      "name": "Normalize incoming Wazuh alert"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 3: Stage 1 — Stateful Deduplication Cache\n// Uses n8n workflow static data as a persistent TTL cache.\n\n// 1. Corrected n8n syntax for static data\nconst staticData = $getWorkflowStaticData('global');\nconst input      = $input.first().json;\n\n// 2. Safety check: 'normalized' is not in the provided input JSON. \n// Adding an empty object fallback to prevent a new TypeError.\nconst normalized = input.normalized || {};\nconst dedupeKey  = normalized.dedupeKey || input.body?.rule?.id || 'default_key';\n\nconst WINDOW_MS  = 15 * 60 * 1000;  // 15-minute suppression window\nconst now        = Date.now();\n\n// Initialize the cache namespace if first run\nif (!staticData.dedupeCache) {\n  staticData.dedupeCache = {};\n}\n\n// ── Garbage collect stale keys (run on every alert to prevent memory growth) ──\nconst keysToDelete = [];\nfor (const [key, ts] of Object.entries(staticData.dedupeCache)) {\n  if ((now - ts) > WINDOW_MS * 2) {  // double window for safety margin\n    keysToDelete.push(key);\n  }\n}\nkeysToDelete.forEach(k => delete staticData.dedupeCache[k]);\n\n// ── Deduplication check ──\nconst lastSeen   = staticData.dedupeCache[dedupeKey];\nconst isDuplicate = !!(lastSeen && (now - lastSeen) < WINDOW_MS);\nconst minutesAgo  = lastSeen ? Math.round((now - lastSeen) / 60000) : null;\n\nif (!isDuplicate) {\n  // First occurrence in window — record it\n  staticData.dedupeCache[dedupeKey] = now;\n}\n\nreturn [{\n  json: {\n    ...input,\n    dedup: {\n      isDuplicate,\n      dedupeKey,\n      lastSeenMinutesAgo: minutesAgo,\n      cacheSize: Object.keys(staticData.dedupeCache).length,\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        208,
+        16
+      ],
+      "id": "7d9d2561-093f-4790-93dd-ac1e4c1e6dbc",
+      "name": "Deduplication Cache"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "8c20ab5a-a3d0-4749-afb2-e1a4d5f88ae4",
+              "leftValue": "={{ $json.dedup.isDuplicate }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        416,
+        16
+      ],
+      "id": "59c78d6f-6b04-4c44-9eca-1e59f416c7fb",
+      "name": "If1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract credentials from Vault KV v2 response\nconst vaultResponse = $input.first().json;\n\n// 1. Fix the Node Reference\n// Replace 'Deduplication Cache' with the EXACT name of the node you are trying to pull from.\nconst prevData = $('Deduplication Cache').first().json; \n\n// 2. Fix the JSON Path\n// Based on your input, the KV pairs are directly under .data, not .data.data\nconst indexerCreds = vaultResponse.data; \n\nreturn [{\n  json: {\n    ...prevData,\n    vault: {\n      indexer: {\n        url:      indexerCreds.url,\n        username: indexerCreds.username,\n        password: indexerCreds.password,\n        // Pre-compute Basic auth header\n        basicAuth: 'Basic ' + Buffer.from(`${indexerCreds.username}:${indexerCreds.password}`).toString('base64'),\n      }\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        800,
+        128
+      ],
+      "id": "289acdbf-2201-4205-b784-2fbfb4ea107b",
+      "name": "Parse Vault Response"
+    },
+    {
+      "parameters": {
+        "content": "## Webhook Ingestion, Normalization & Deduplication",
+        "height": 880,
+        "width": 1312
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        -336,
+        -320
+      ],
+      "typeVersion": 1,
+      "id": "044b3fc5-b695-42c8-964f-9184ab3ba450",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.vault.indexer.url }}/wazuh-alerts-*/_search",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.vault.indexer.basicAuth }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"size\": 0,\n  \"_source\": false,\n  \"query\": {\n    \"bool\": {\n      \"must\": [\n        {\n          \"range\": {\n            \"timestamp\": {\n              \"gte\": \"now-4h\",\n              \"lte\": \"now\"\n            }\n          }\n        },\n        {\n          \"term\": {\n            \"agent.name\": \"{{$json.rawAlert.body.agent.name}}\"\n          }\n        }\n      ]\n    }\n  },\n  \"aggs\": {\n    \"total_alert_count\": {\n      \"value_count\": { \"field\": \"_id\" }\n    },\n    \"by_rule_level\": {\n      \"terms\": {\n        \"field\": \"rule.level\",\n        \"size\": 15\n      }\n    },\n    \"top_triggered_rules\": {\n      \"terms\": {\n        \"field\": \"rule.id\",\n        \"size\": 5,\n        \"order\": { \"_count\": \"desc\" }\n      },\n      \"aggs\": {\n        \"rule_desc\": {\n          \"terms\": {\n            \"field\": \"rule.description\",\n            \"size\": 1\n          }\n        }\n      }\n    },\n    \"unique_source_ips\": {\n      \"cardinality\": { \"field\": \"data.srcip\" }\n    },\n    \"max_severity\": {\n      \"max\": { \"field\": \"rule.level\" }\n    }\n  }\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1056,
+        128
+      ],
+      "id": "6cf50e6f-8dbd-4ec4-9a82-a509a31e909e",
+      "name": "OpenSearch Historical Query"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 7: Parse the OpenSearch aggregation response into a clean context object.\n\nconst osResponse = $input.first().json;\n\n// 1. Fixed Node Reference: Ensure this perfectly matches your canvas node name!\nconst prevData   = $('Parse Vault Response').first().json; \n\nconst aggs = osResponse.aggregations;\n\n// Extract alert count\nconst totalAlerts = aggs?.total_alert_count?.value || 0;\n\n// Build severity distribution map: { \"5\": 12, \"7\": 3, \"10\": 1 }\nconst severityDist = {};\n(aggs?.by_rule_level?.buckets || []).forEach(b => {\n  severityDist[`level_${b.key}`] = b.doc_count;\n});\n\n// Build top rules list: [{ rule_id: \"...\", count: N, description: \"...\" }]\nconst topRules = (aggs?.top_triggered_rules?.buckets || []).map(b => ({\n  ruleId:      b.key,\n  count:       b.doc_count,\n  description: b.rule_desc?.buckets?.[0]?.key || 'N/A',\n}));\n\n// Unique source IPs seen attacking this host in the window\nconst uniqueSrcIps = aggs?.unique_source_ips?.value || 0;\n\n// Max severity seen in the window\nconst maxSeverity = aggs?.max_severity?.value || 0;\n\n// Compute a simple activity score for the LLM context\n// High volume + high max severity = clearly anomalous baseline\nconst activityScore = Math.min(100, Math.round(\n  (totalAlerts * 0.5) + (maxSeverity * 3) + (uniqueSrcIps * 2)\n));\n\n// 2. Safe Fallback for hostName\n// We saw earlier that 'normalized' might not exist in the raw alert payload.\nconst hostName = prevData.normalized?.hostName || 'UNKNOWN_HOST';\n\nreturn [{\n  json: {\n    ...prevData,\n    enrichment: {\n      windowMinutes:    240, // Updated to 4 hours to match the OpenSearch query\n      totalAlerts,\n      severityDistribution: severityDist,\n      topRules,\n      uniqueSourceIPs:  uniqueSrcIps,\n      maxSeverityInWindow: maxSeverity,\n      activityScore,\n      // Pre-format a human-readable summary for the LLM prompt\n      contextSummary: `In the last 4 hours, host \"${hostName}\" generated ` +\n        `${totalAlerts} total alerts (max severity: ${maxSeverity}). ` +\n        `Top triggered rules: ${topRules.map(r => `[${r.ruleId}] ${r.description} (×${r.count})`).join('; ')}. ` +\n        `Unique attacking IPs: ${uniqueSrcIps}. Activity score: ${activityScore}/100.`\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1264,
+        128
+      ],
+      "id": "8689334c-6a75-463a-adb9-3252e5049a1b",
+      "name": "Parse Enrichment Response"
+    },
+    {
+      "parameters": {
+        "content": "## Enrichment (OpenSearch Historical Query)",
+        "height": 880,
+        "width": 544,
+        "color": 3
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        992,
+        -320
+      ],
+      "typeVersion": 1,
+      "id": "8c47ff5a-2ee2-46e5-a73c-651e229d56f2",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "secretPath": "n8n/soar/wazuh_api",
+        "version": 1,
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-hashi-vault.hashiCorpVault",
+      "typeVersion": 1,
+      "position": [
+        1568,
+        128
+      ],
+      "id": "37e92188-f9d6-45e8-b417-2458f3ccd916",
+      "name": "HashiCorp Vault1",
+      "credentials": {
+        "hashiCorpVaultApi": {
+          "id": "TLB3kKGjHm6SO66z",
+          "name": "HashiCorp Vault"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const vaultData = $('HashiCorp Vault1').first().json.data;\nconst user = vaultData.username;\nconst pass = vaultData.password;\n\n// Code nodes are allowed to use Buffer!\nconst encodedCreds = Buffer.from(`${user}:${pass}`).toString('base64');\n\nreturn [{\n  json: {\n    wazuhApiUrl: vaultData.url,\n    authHeader: `Basic ${encodedCreds}`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1808,
+        128
+      ],
+      "id": "b949b214-9282-475b-aad8-fce0028ceaf7",
+      "name": "Code in JavaScript1"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('HashiCorp Vault1').first().json.data.url }}/security/user/authenticate",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $json.authHeader }}"
+            }
+          ]
+        },
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        2016,
+        128
+      ],
+      "id": "f2146887-01cc-457a-9bb9-5ee925ee6ee5",
+      "name": "Wazuh API Authentication - Get JWT"
+    },
+    {
+      "parameters": {
+        "jsCode": "const authResponse = $input.first().json;\nconst jwtToken     = authResponse.data.token;\n\nif (!jwtToken) {\n  throw new Error(`Wazuh API authentication failed: ${JSON.stringify(authResponse)}`);\n}\n\n// Pulling the alert context from your enrichment node\nconst enrichedData = $('Parse Enrichment Response').first().json;\n\n// Pulling the Wazuh manager URL from your second Vault node\nconst vaultData = $('HashiCorp Vault1').first().json;\n\nreturn [{\n  json: {\n    ...enrichedData,\n    wazuh: {\n      jwtToken,\n      bearerHeader: `Bearer ${jwtToken}`,\n      apiUrl: vaultData.data.url,\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2224,
+        128
+      ],
+      "id": "ade5f780-b25e-4ff0-8e8b-f695045e898e",
+      "name": "Parse JWT"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 9: Assemble the full context package for the LLM prompt.\n\nconst data       = $input.first().json;\nconst normalized = data.normalized;\nconst enrichment = data.enrichment;\nconst raw        = data.rawAlert;\n\n// Build a clean, structured context string for the LLM\n// Only include fields the LLM needs — avoid token bloat from full raw alert\nconst alertContext = {\n  alert_id:        normalized.alertId,\n  timestamp:       normalized.alertTime,\n  host:            normalized.hostName,\n  agent_id:        normalized.agentId,\n  rule_id:         normalized.ruleId,\n  rule_level:      normalized.ruleLevel,\n  rule_description: normalized.ruleDesc,\n  rule_groups:     normalized.ruleGroups,\n  source_ip:       normalized.srcIp,\n  destination_ip:  normalized.dstIp,\n  mitre_technique: normalized.mitreTechnique,\n  mitre_tactic:    normalized.mitreTactic,\n  // Include relevant raw data fields (truncated)\n  raw_event_data: JSON.stringify(raw?.data || {}).substring(0, 1500),\n};\n\nconst historyContext = {\n  window_minutes:         enrichment.windowMinutes,\n  total_alerts:           enrichment.totalAlerts,\n  max_severity_in_window: enrichment.maxSeverityInWindow,\n  severity_distribution:  enrichment.severityDistribution,\n  top_triggered_rules:    enrichment.topRules,\n  unique_source_ips:      enrichment.uniqueSourceIPs,\n  activity_score:         enrichment.activityScore,\n};\n\nreturn [{\n  json: {\n    ...data,\n    llmInput: {\n      alertContext,\n      historyContext,\n      // These are passed directly into the prompt template in Node 10\n      alertContextJson:  JSON.stringify(alertContext,  null, 2),\n      historyContextJson: JSON.stringify(historyContext, null, 2),\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2432,
+        128
+      ],
+      "id": "ff932170-10a8-4a8e-950d-850b81daafd1",
+      "name": "Build LLM Context Object"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "You are ARIA (Automated Risk and Incident Analyst), a senior-level Security Operations Center AI integrated into a production SOAR platform.\n\nYour job is to analyze a SINGLE security alert in the context of the host's recent historical activity and produce a structured risk assessment. You must think step by step before concluding.\n\n## CRITICAL OUTPUT CONTRACT\nYour ENTIRE response MUST be a single, valid JSON object. No markdown fences, no preamble, no explanation outside the JSON. The schema is:\n\n{\n  \"reasoning\": \"<your step-by-step analysis as a single string>\",\n  \"risk_score\": <integer 1-100>,\n  \"action\": \"<IGNORE | INVESTIGATE | ISOLATE>\",\n  \"confidence\": \"<LOW | MEDIUM | HIGH>\",\n  \"key_indicators\": [\"<indicator 1>\", \"<indicator 2>\"],\n  \"recommended_next_steps\": \"<brief string>\"\n}\n\n## ACTION THRESHOLDS (you MUST follow these):\n- IGNORE   → risk_score 1-30:  The alert is explainable by normal activity, low confidence attack signal, or known benign pattern.\n- INVESTIGATE → risk_score 31-74: Something unusual is happening that warrants human review and case creation, but evidence for automated isolation is insufficient.\n- ISOLATE  → risk_score 75-100: High-confidence, multi-indicator attack in progress (e.g., high alert volume + MITRE lateral movement/execution tactic + active external IP). You are recommending a firewall block. This should be RARE. Do NOT ISOLATE on a single alert alone unless it is an unambiguous catastrophic event (e.g., known ransomware rule firing).\n\n## YOUR REASONING STEPS (address each in the \"reasoning\" field):\n1. **Alert Baseline:** Is this rule level and rule type inherently severe, or could it be a misconfiguration/benign trigger?\n2. **Velocity Analysis:** What does the 4-hour alert history tell you? Is this an isolated event or part of a pattern? An activity_score > 60 is a strong escalation signal.\n3. **MITRE Context:** If a MITRE ATT&CK tactic/technique is present, what does it suggest about the adversary's kill chain stage?\n4. **Source IP Analysis:** Is a source IP present? Does a non-null, non-private source IP combined with high alert volume suggest an active external actor?\n5. **Convergence:** Do the alert, history, and MITRE data converge on a coherent threat scenario, or is the picture mixed/noisy?\n6. **Action Justification:** State clearly why you chose IGNORE, INVESTIGATE, or ISOLATE based on the threshold rules above.\n\n## BIAS INSTRUCTIONS:\n- STRONGLY prefer INVESTIGATE over ISOLATE. Isolating a production host is a denial-of-service risk.\n- A single Level 5-7 alert with < 10 total host alerts in 60 minutes should almost always be IGNORE or INVESTIGATE.\n- Do NOT let a high rule level alone push you to ISOLATE. Evidence convergence is required. \n\"CRITICAL INSTRUCTION: Be extremely concise. Your reasoning field MUST be 3 sentences or less. Do not write essays. Get straight to the point.\"",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        2704,
+        128
+      ],
+      "id": "624dbc1f-1a9c-4c6a-9149-b8a344956303",
+      "name": "Basic LLM Chain1"
+    },
+    {
+      "parameters": {
+        "modelName": "models/gemini-2.5-flash",
+        "options": {
+          "temperature": 0.1
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        2704,
+        352
+      ],
+      "id": "0073c59d-42b2-4a6c-85be-b5e4a7762ca8",
+      "name": "Google Gemini Chat Model1",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "CnnriSrtdSzukxpA",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 11: Safely parse the LLM output JSON and enforce schema + fallback behavior.\n// Gemini sometimes wraps JSON in markdown fences despite instructions — strip them.\n\nconst data      = $input.first().json;\nconst llmOutput = data.output || data.text || data.response || '';\n\nlet parsed;\n\ntry {\n  // Strip markdown code fences if present (Gemini fallback behavior)\n  const cleaned = llmOutput\n    .replace(/^```json\\s*/i, '')\n    .replace(/^```\\s*/i, '')\n    .replace(/```\\s*$/,    '')\n    .trim();\n\n  parsed = JSON.parse(cleaned);\n} catch (err) {\n  // Hard parse failure — log the raw output and default to INVESTIGATE\n  console.error('LLM JSON parse failed. Raw output:', llmOutput);\n  parsed = {\n    reasoning:             `PARSE_ERROR: LLM output was not valid JSON. Raw: ${llmOutput.substring(0, 500)}`,\n    risk_score:            50,\n    action:                'INVESTIGATE',\n    confidence:            'LOW',\n    key_indicators:        ['llm_parse_failure'],\n    recommended_next_steps: 'Manual review required — AI output could not be parsed.',\n  };\n}\n\n// ── Schema enforcement & sanitization ──\nconst validActions = ['IGNORE', 'INVESTIGATE', 'ISOLATE'];\n\nconst riskScore = Math.min(100, Math.max(1, parseInt(parsed.risk_score || 50, 10)));\nlet   action    = (parsed.action || 'INVESTIGATE').toUpperCase();\n\nif (!validActions.includes(action)) {\n  action = 'INVESTIGATE'; // Safe default for unexpected action values\n}\n\n// Double-check threshold consistency (prevent hallucinated action/score mismatches)\nif (action === 'ISOLATE' && riskScore < 75) {\n  console.warn(`LLM action/score mismatch: ISOLATE requested with risk_score=${riskScore}. Downgrading to INVESTIGATE.`);\n  action = 'INVESTIGATE';\n}\nif (action === 'IGNORE' && riskScore > 30) {\n  console.warn(`LLM action/score mismatch: IGNORE requested with risk_score=${riskScore}. Upgrading to INVESTIGATE.`);\n  action = 'INVESTIGATE';\n}\n\nreturn [{\n  json: {\n    ...data,\n    assessment: {\n      reasoning:            parsed.reasoning            || 'No reasoning provided.',\n      risk_score:           riskScore,\n      action,\n      confidence:           parsed.confidence           || 'LOW',\n      key_indicators:       parsed.key_indicators       || [],\n      recommended_next_steps: parsed.recommended_next_steps || '',\n      // Metadata for audit log\n      llm_raw_output:       llmOutput,\n      parse_success:        !!parsed.reasoning,\n      evaluated_at:         new Date().toISOString(),\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3056,
+        128
+      ],
+      "id": "7e52131b-75bb-4d8b-aee7-f1b53c9c1799",
+      "name": "Parse & Validate LLM JSON Output"
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "leftValue": "={{ $json.assessment.action }}",
+                    "rightValue": "IGNORE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    },
+                    "id": "6deb8887-a217-4ec8-b80e-67f1a2ca91f1"
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Ignore (Stop)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "32f4414d-b70e-4d0e-bc8b-bd946b8dbed8",
+                    "leftValue": "={{ $json.assessment.action }}",
+                    "rightValue": "INVESTIGATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Investigate (Alert)"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "strict",
+                  "version": 3
+                },
+                "conditions": [
+                  {
+                    "id": "97ad91a6-5d88-42a6-acff-80c1d4ea8adb",
+                    "leftValue": "={{ $json.assessment.action }}",
+                    "rightValue": "ISOLATE",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "Isolate (Active Response)"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.4,
+      "position": [
+        3344,
+        96
+      ],
+      "id": "7770c560-044e-4b7b-845e-47e21b5130fd",
+      "name": "Action Router"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node 13a: Log IGNORE decisions for audit trail and respond to webhook.\nconst data = $input.first().json;\nconsole.log(JSON.stringify({\n  event:      'soar_decision',\n  action:     'IGNORE',\n  host:       data.normalized.hostName,\n  rule_id:    data.normalized.ruleId,\n  risk_score: data.assessment.risk_score,\n  reasoning:  data.assessment.reasoning.substring(0, 200),\n  timestamp:  new Date().toISOString(),\n}));\n// This output feeds the \"Respond to Webhook\" node\nreturn [{ json: { status: 'suppressed', action: 'IGNORE', ...data.assessment } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        -160
+      ],
+      "id": "df76a50f-f216-47a0-a17a-14deacc7e9e6",
+      "name": "Log & Suppress"
+    },
+    {
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ $('Parse JWT').item.json.wazuh.apiUrl }}/active-response?agents_list={{ $json.normalized.agentId }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $('Parse JWT').item.json.wazuh.bearerHeader }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"command\": \"firewall-drop0\",\n  \"custom\": false,\n  \"arguments\": [\n    \"-\",\n    \"null\",\n    \"{{ $json.normalized.srcIp }}\",\n    \"0\"\n  ]\n}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        4080,
+        128
+      ],
+      "id": "ab6532fb-df88-4d6f-aeb0-966d3819a152",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "jsCode": "// SAFETY GATE: Hard-coded rules that MUST pass before any isolation fires.\n// This is your last line of defense against self-inflicted DoS.\n\nconst data = $input.first().json;\n\n// 1. Safe object chaining: Default to empty objects if missing\nconst n          = data.normalized || {};\nconst enrichment = data.enrichment || {};\n\n// 2. Extract values with safe defaults\nconst hostName    = n.hostName || 'UNKNOWN_HOST';\nconst agentId     = n.agentId  || 'UNKNOWN_AGENT';\nconst srcIp       = n.srcIp    || null;\nconst totalAlerts = enrichment.totalAlerts || 0;\n\nconst blocklist = [\n  'wazuh.manager', 'wazuh.indexer', 'vault.internal',\n  'n8n.internal', 'dc01', 'pdc',  // add your critical infrastructure hostnames\n];\n\nconst errors = [];\n\nif (blocklist.some(b => hostName.toLowerCase().includes(b))) {\n  errors.push(`BLOCKED: Host \"${hostName}\" is on the infrastructure protection blocklist.`);\n}\n\nif (agentId === '000') {\n  errors.push(`BLOCKED: Agent ID 000 is the Wazuh Manager itself. Refusing isolation.`);\n}\n\nif (!srcIp && totalAlerts < 20) {\n  errors.push(`SAFETY: No source IP identified and alert volume < 20. Downgrading to INVESTIGATE.`);\n}\n\nif (errors.length > 0) {\n  // Override the action — do NOT proceed to isolation\n  return [{\n    json: {\n      ...data,\n      isolation_blocked: true,\n      isolation_block_reason: errors.join(' | '),\n      assessment: { ...(data.assessment || {}), action: 'INVESTIGATE' }\n    }\n  }];\n}\n\nreturn [{ json: { ...data, isolation_blocked: false } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3600,
+        144
+      ],
+      "id": "85a094ec-8192-4e3f-a649-cfe5d9e5265b",
+      "name": "Validate Preconditions"
+    },
+    {
+      "parameters": {
+        "fromEmail": "tisamplework@gmail.com",
+        "toEmail": "tisamplework@gmail.com",
+        "subject": "=🚨 [SOC Alert] Risk Score {{ $json.assessment.risk_score }}: {{ $json.normalized?.ruleDesc || 'Suspicious Activity' }}",
+        "html": "=<div style=\"font-family: Arial, Helvetica, sans-serif; background-color: #f4f4f5; padding: 20px; color: #333333;\">\n  <div style=\"max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e4e4e7; border-radius: 8px; overflow: hidden;\">\n\n    <!-- Header -->\n    <div style=\"background-color: #ef4444; padding: 20px; text-align: center; color: #ffffff;\">\n      <h2 style=\"margin: 0; font-size: 20px; letter-spacing: 0.5px;\">🚨 SECURITY INCIDENT TRIAGE</h2>\n      <p style=\"margin: 5px 0 0 0; font-size: 13px; font-weight: bold; text-transform: uppercase; opacity: 0.9;\">Charif Labs Automated SecOps</p>\n    </div>\n\n    <!-- Metrics Table -->\n    <div style=\"padding: 20px; background-color: #f8fafc; border-bottom: 1px solid #e4e4e7;\">\n      <table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"font-size: 14px;\">\n        <tr>\n          <td width=\"50%\" style=\"padding: 10px; border-right: 1px solid #cbd5e1;\">\n            <span style=\"color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: bold;\">Target Endpoint</span><br>\n            <strong style=\"font-size: 15px; color: #0f172a;\">{{ $json.normalized?.hostName || 'Unknown Host' }}</strong>\n          </td>\n          <td width=\"50%\" style=\"padding: 10px; padding-left: 15px;\">\n            <span style=\"color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: bold;\">Risk Score & Action</span><br>\n            <strong style=\"font-size: 15px; color: #ef4444;\">{{ $json.assessment.risk_score }}/100 - {{ $json.assessment.action }}</strong>\n          </td>\n        </tr>\n      </table>\n    </div>\n\n    <!-- Analysis Section -->\n    <div style=\"padding: 25px;\">\n      <h3 style=\"margin-top: 0; color: #0284c7; font-size: 16px; border-bottom: 2px solid #e0f2fe; padding-bottom: 8px; text-transform: uppercase;\">🤖 AI Expert Analysis</h3>\n\n      <!-- AI Reasoning -->\n      <div style=\"background-color: #f8fafc; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 14px; line-height: 1.5; color: #334155;\">\n        {{ $json.assessment.reasoning }}\n      </div>\n\n      <!-- Key Indicators -->\n      <h4 style=\"margin-top: 20px; margin-bottom: 8px; color: #1e293b; font-size: 14px;\">Key Indicators:</h4>\n      <div style=\"margin-top: 0; color: #475569; font-size: 14px; line-height: 1.6;\">\n        • {{ $json.assessment.key_indicators.join('<br>• ') }}\n      </div>\n\n      <!-- Recommended Steps -->\n      <h4 style=\"margin-top: 20px; margin-bottom: 8px; color: #1e293b; font-size: 14px;\">Recommended Next Steps:</h4>\n      <p style=\"margin-top: 0; color: #475569; font-size: 14px; line-height: 1.5; background-color: #fffbeb; border-left: 4px solid #fbbf24; padding: 10px;\">\n        {{ $json.assessment.recommended_next_steps }}\n      </p>\n    </div>\n\n    <!-- Footer -->\n    <div style=\"background-color: #f8fafc; padding: 15px; text-align: center; font-size: 12px; color: #64748b; border-top: 1px solid #e2e8f0;\">\n      Generated by Charif Labs SOAR Pipeline<br>\n      Evaluated At: {{ $json.assessment.evaluated_at }}\n    </div>\n\n  </div>\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        3952,
+        -48
+      ],
+      "id": "c32634b8-69f3-4b8d-a7fa-16ab7384eba4",
+      "name": "INVESTIGATE",
+      "webhookId": "cf20581f-4e7b-4eb5-a56f-68b45b02a204",
+      "credentials": {
+        "smtp": {
+          "id": "maspHbs7eMDBdXde",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const arResponse = $input.first().json;\n\n// 1. Fixed Node Reference to match your actual n8n canvas\nconst data = $('Validate Preconditions').first().json;\n\n// 2. Safely check if Wazuh successfully applied the firewall drop\nconst success = arResponse?.data?.affected_items?.length > 0 ||\n                arResponse?.data?.total_affected_items > 0;\n\n// 3. Build the Audit Record (with safe fallbacks)\nconst auditRecord = {\n  event:        'soar_isolation_attempt',\n  success,\n  host:         data.normalized?.hostName || 'UNKNOWN_HOST',\n  agent_id:     data.normalized?.agentId  || 'UNKNOWN_AGENT',\n  blocked_ip:   data.normalized?.srcIp    || 'UNKNOWN_IP',\n  risk_score:   data.assessment?.risk_score,\n  reasoning:    data.assessment?.reasoning?.substring(0, 300) || 'No reasoning',\n  ar_response:  JSON.stringify(arResponse || {}).substring(0, 500),\n  timestamp:    new Date().toISOString(),\n};\n\nconsole.log(JSON.stringify(auditRecord));\n\nif (!success) {\n  throw new Error(`Active Response failed for agent ${auditRecord.agent_id}. Response: ${JSON.stringify(arResponse)}`);\n}\n\nreturn [{ json: { ...data, isolationResult: auditRecord } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4224,
+        0
+      ],
+      "id": "9f409b1f-abde-4a3f-8e63-d34481a1d55c",
+      "name": "Parse Active Response & Build Audit Record"
+    },
+    {
+      "parameters": {
+        "fromEmail": "tisamplework@gmail.com",
+        "toEmail": "tisamplework@gmail.com",
+        "subject": "=🚨 [SOC Alert] Host: {{ $('Webhook').item.json.body.rule.description }} | Windows Log Cleared",
+        "html": "=<div style=\"font-family: Arial, Helvetica, sans-serif; background-color: #f4f4f5; padding: 20px; color: #333333;\">\n  <div style=\"max-width: 600px; margin: 0 auto; background: #ffffff; border: 1px solid #e4e4e7; border-radius: 8px; overflow: hidden;\">\n\n    <div style=\"background-color: {{ $json.assessment.action === 'ISOLATE' ? '#ef4444' : ($json.assessment.action === 'INVESTIGATE' ? '#f59e0b' : '#3b82f6') }}; padding: 20px; text-align: center; color: #ffffff;\">\n      <h2 style=\"margin: 0; font-size: 20px; letter-spacing: 0.5px;\">\n        [{{ $json.assessment.action }}] SOAR Security Alert\n      </h2>\n      <p style=\"margin: 5px 0 0 0; font-size: 13px; font-weight: bold; text-transform: uppercase; opacity: 0.9;\">Charif Labs Automated Pipeline</p>\n    </div>\n\n    {{ $json.assessment.action === 'ISOLATE' ? '<div style=\"background-color: #fee2e2; border-bottom: 2px solid #ef4444; padding: 15px; text-align: center; color: #991b1b; font-weight: bold; font-size: 15px;\">🚨 ACTIVE RESPONSE TRIGGERED: Firewall Drop executed against IP ' + ($json.normalized?.srcIp || 'Unknown') + '</div>' : '' }}\n\n    <div style=\"padding: 20px; background-color: #f8fafc; border-bottom: 1px solid #e4e4e7;\">\n      <table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\" style=\"font-size: 14px;\">\n        <tr>\n          <td width=\"50%\" style=\"padding: 10px; border-right: 1px solid #cbd5e1;\">\n            <span style=\"color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: bold;\">Target Endpoint</span><br>\n            <strong style=\"font-size: 15px; color: #0f172a;\">{{ $json.normalized?.hostName || 'Unknown Host' }}</strong>\n          </td>\n          <td width=\"50%\" style=\"padding: 10px; padding-left: 15px;\">\n            <span style=\"color: #64748b; font-size: 11px; text-transform: uppercase; font-weight: bold;\">Risk Score & Confidence</span><br>\n            <strong style=\"font-size: 15px; color: #0f172a;\">{{ $json.assessment.risk_score }}/100 ({{ $json.assessment.confidence }})</strong>\n          </td>\n        </tr>\n      </table>\n    </div>\n\n    <div style=\"padding: 25px;\">\n      <h3 style=\"margin-top: 0; color: #1e293b; font-size: 16px; border-bottom: 2px solid #e2e8f0; padding-bottom: 8px;\">Triggered Rule: {{ $json.normalized?.ruleDesc || 'Unknown' }}</h3>\n\n      <div style=\"background-color: #f8fafc; padding: 15px; border-radius: 6px; border: 1px solid #e2e8f0; font-size: 14px; line-height: 1.5; color: #334155;\">\n        {{ $json.assessment.reasoning }}\n      </div>\n\n      <h4 style=\"margin-top: 20px; margin-bottom: 8px; color: #1e293b; font-size: 14px;\">Key Indicators:</h4>\n      <div style=\"margin-top: 0; color: #475569; font-size: 14px; line-height: 1.6;\">\n        • {{ ($json.assessment.key_indicators || []).join('<br>• ') }}\n      </div>\n\n      <h4 style=\"margin-top: 20px; margin-bottom: 8px; color: #1e293b; font-size: 14px;\">Recommended Next Steps:</h4>\n      <p style=\"margin-top: 0; color: #475569; font-size: 14px; line-height: 1.5; background-color: #fffbeb; border-left: 4px solid #fbbf24; padding: 10px;\">\n        {{ $json.assessment.recommended_next_steps || 'None provided.' }}\n      </p>\n    </div>\nz\n  </div>\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        4416,
+        -160
+      ],
+      "id": "c971e86c-d92e-45d3-beb8-6478965b6d09",
+      "name": "Send an Email1",
+      "webhookId": "cf20581f-4e7b-4eb5-a56f-68b45b02a204",
+      "credentials": {
+        "smtp": {
+          "id": "maspHbs7eMDBdXde",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "fromEmail": "tisamplework@gmail.com",
+        "toEmail": "tisamplework@gmail.com",
+        "subject": "=🚨 [SOC Alert] Host: {{ $('Webhook').item.json.body.rule.description }} | Windows Log Cleared",
+        "html": "=<div style=\"font-family: Arial, Helvetica, sans-serif; background-color: #27272a; padding: 20px; color: #f4f4f5;\">\n  <div style=\"max-width: 600px; margin: 0 auto; background: #18181b; border: 1px solid #52525b; border-radius: 8px; overflow: hidden;\">\n\n    <div style=\"background-color: #991b1b; padding: 20px; text-align: center; color: #ffffff;\">\n      <h2 style=\"margin: 0; font-size: 20px; letter-spacing: 0.5px;\">⚠️ PIPELINE FAILURE THRESHOLD MET</h2>\n      <p style=\"margin: 5px 0 0 0; font-size: 13px; font-weight: bold; text-transform: uppercase; color: #fca5a5;\">Manual Triage Required Immediately</p>\n    </div>\n\n    <div style=\"padding: 25px;\">\n      <p style=\"font-size: 15px; line-height: 1.5; color: #e4e4e7;\">\n        The SOAR pipeline has failed to route alerts correctly <strong>{{ $json.fallback_metrics.current_error_count }} times</strong> within the last {{ $json.fallback_metrics.window_minutes }} minutes. The AI logic or JSON parsing may be experiencing an outage.\n      </p>\n\n      <h3 style=\"color: #f87171; font-size: 14px; text-transform: uppercase; border-bottom: 1px solid #3f3f46; padding-bottom: 5px;\">Latest Unhandled Alert Details</h3>\n      \n      <table width=\"100%\" cellspacing=\"0\" cellpadding=\"8\" style=\"font-size: 13px; background-color: #27272a; border-radius: 4px; margin-bottom: 20px;\">\n        <tr>\n          <td style=\"color: #a1a1aa; width: 120px;\"><strong>Host:</strong></td>\n          <td style=\"color: #ffffff;\">{{ $json.normalized?.hostName || 'Unknown' }}</td>\n        </tr>\n        <tr>\n          <td style=\"color: #a1a1aa;\"><strong>Rule:</strong></td>\n          <td style=\"color: #ffffff;\">{{ $json.normalized?.ruleDesc || 'Unknown' }}</td>\n        </tr>\n        <tr>\n          <td style=\"color: #a1a1aa;\"><strong>Failed Action:</strong></td>\n          <td style=\"color: #fca5a5; font-family: monospace;\">{{ $json.assessment?.action || 'Missing action data' }}</td>\n        </tr>\n      </table>\n\n      <p style=\"font-size: 13px; color: #a1a1aa; margin-top: 20px;\">\n        <em>Please check the n8n execution logs to diagnose the parsing failure. The automated fallback counter will reset automatically.</em>\n      </p>\n    </div>\n\n  </div>\n</div>",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        3952,
+        304
+      ],
+      "id": "8f727693-b34c-4de0-bc6c-7a8168a0c9d3",
+      "name": "Fallback",
+      "webhookId": "cf20581f-4e7b-4eb5-a56f-68b45b02a204",
+      "credentials": {
+        "smtp": {
+          "id": "maspHbs7eMDBdXde",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Node: Fallback Counter\n// Tracks how many times the pipeline fails to route properly within a time window.\n\nconst staticData = $getWorkflowStaticData('global');\nconst data       = $input.first().json;\n\nconst now        = Date.now();\nconst WINDOW_MS  = 60 * 60 * 1000; // 1-hour tracking window\nconst THRESHOLD  = 3;              // Number of errors before triggering the alert\n\n// 1. Initialize or reset the tracker if the 1-hour window has passed\nif (!staticData.fallbackTracker || (now - staticData.fallbackTracker.startTime) > WINDOW_MS) {\n  staticData.fallbackTracker = {\n    count: 0,\n    startTime: now\n  };\n}\n\n// 2. Increment the error counter\nstaticData.fallbackTracker.count += 1;\nconst currentCount = staticData.fallbackTracker.count;\n\n// 3. Check if we have hit the critical threshold\nconst triggerCriticalAlert = currentCount >= THRESHOLD;\n\nreturn [{\n  json: {\n    ...data,\n    fallback_metrics: {\n      current_error_count: currentCount,\n      threshold: THRESHOLD,\n      trigger_alert: triggerCriticalAlert,\n      window_minutes: 60\n    }\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3584,
+        400
+      ],
+      "id": "7cfeb03e-2bf5-4eac-b7ab-a452353c3bf7",
+      "name": "Fallback error"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "943f90cf-c34b-4f69-9e08-b7d5be54a38b",
+              "leftValue": "={{ $json.fallback_metrics.trigger_alert }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals",
+                "name": "filter.operator.equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3776,
+        400
+      ],
+      "id": "b8ee1323-0490-4737-af66-e12064e13713",
+      "name": "If2"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final Master Audit Log \nconst data = $input.first().json;\n\nconst masterAuditLog = {\n  timestamp: new Date().toISOString(),\n  pipeline_status: \"COMPLETED\",\n  \n  // 1. The original alert\n  target_host: data.normalized?.hostName || 'Unknown',\n  rule_triggered: data.normalized?.ruleDesc || 'Unknown',\n  \n  // 2. The historical context\n  alerts_in_last_4h: data.enrichment?.totalAlerts || 0,\n  \n  // 3. The AI's decision\n  ai_action: data.assessment?.action || 'ERROR',\n  ai_risk_score: data.assessment?.risk_score || 0,\n  ai_reasoning: data.assessment?.reasoning || 'No reasoning captured',\n  \n  // 4. Action Results (Only present if it went down these branches)\n  active_response_fired: !!data.isolationResult,\n  fallback_error_triggered: !!data.fallback_metrics,\n};\n\n// Print to the n8n console log (useful for debugging)\nconsole.log(\"SOAR AUDIT LOG:\", JSON.stringify(masterAuditLog));\n\nreturn [{ json: masterAuditLog }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4832,
+        80
+      ],
+      "id": "b3569aa4-d680-4423-bfb4-5599bb25d255",
+      "name": "Code in JavaScript"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Parse Vault Response').first().json.vault.indexer.url }}/soar-audit-logs/_doc",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ $('Parse Vault Response').first().json.vault.indexer.basicAuth }}"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ $json }}",
+        "options": {
+          "allowUnauthorizedCerts": true
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        5024,
+        80
+      ],
+      "id": "58f3f458-bcd7-4d24-a139-b5ead67b44ce",
+      "name": "Send To Opensearch"
+    },
+    {
+      "parameters": {
+        "content": "## Action Routing & Wazuh Active Response",
+        "height": 880,
+        "width": 2000,
+        "color": 4
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        3232,
+        -320
+      ],
+      "typeVersion": 1,
+      "id": "ce52f317-057a-49a9-a23b-087b5d3122a6",
+      "name": "Sticky Note2"
+    },
+    {
+      "parameters": {
+        "content": "## AI Chain-of-Thought Evaluation",
+        "height": 880,
+        "width": 1664,
+        "color": 6
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "position": [
+        1552,
+        -320
+      ],
+      "typeVersion": 1,
+      "id": "cf7e86ff-e5e6-4681-95e3-2f2135d79dea",
+      "name": "Sticky Note3"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "5247f572-1f92-4de8-ab68-d2d7b0169038",
+              "leftValue": "={{ $json.isolation_blocked }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        3808,
+        144
+      ],
+      "id": "7f2d764f-5bdb-4ed3-a2e5-4aac3ab307dd",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconsole.log(JSON.stringify({\n  event: 'alert_suppressed_dedup',\n  key: data.dedup.dedupeKey,\n  last_seen_min_ago: data.dedup.lastSeenMinutesAgo,\n  timestamp: new Date().toISOString()\n}));\nreturn [{ json: { status: 'suppressed', reason: 'dedup', ...data.dedup } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        608,
+        -16
+      ],
+      "id": "288ac0c9-1901-456b-b016-126940f742c7",
+      "name": "Simple Code"
+    }
+  ],
+  "pinData": {
+    "Webhook": [
+      {
+        "json": {
+          "headers": {
+            "accept-encoding": "identity",
+            "content-length": "1229",
+            "host": "app-automation-n8n-1:5678",
+            "user-agent": "Python-urllib/3.10",
+            "content-type": "application/json",
+            "connection": "close"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "timestamp": "2026-06-03T13:27:58.429+0000",
+            "rule": {
+              "level": 5,
+              "description": "A Windows log file was cleared",
+              "id": "63104",
+              "mitre": {
+                "id": [
+                  "T1070"
+                ],
+                "tactic": [
+                  "Defense Evasion"
+                ],
+                "technique": [
+                  "Indicator Removal"
+                ]
+              },
+              "firedtimes": 2,
+              "mail": false,
+              "groups": [
+                "windows",
+                "windows_logs",
+                "log_clearing"
+              ],
+              "gpg13": [
+                "10.1"
+              ],
+              "gdpr": [
+                "II_5.1.f"
+              ]
+            },
+            "agent": {
+              "id": "002",
+              "name": "Bureau-2-IT-01",
+              "ip": "127.0.0.1"
+            },
+            "manager": {
+              "name": "wazuh.manager"
+            },
+            "id": "1780493278.470051",
+            "decoder": {
+              "name": "windows_eventchannel"
+            },
+            "data": {
+              "win": {
+                "system": {
+                  "providerName": "Microsoft-Windows-Eventlog",
+                  "providerGuid": "{fc65ddd8-d6ef-4962-83d5-6e5cfe9ce148}",
+                  "eventID": "104",
+                  "version": "1",
+                  "level": "4",
+                  "task": "104",
+                  "opcode": "0",
+                  "keywords": "0x8000000000000000",
+                  "systemTime": "2026-06-03T13:27:58.6360997Z",
+                  "eventRecordID": "4007",
+                  "processID": "1820",
+                  "threadID": "492",
+                  "channel": "System",
+                  "computer": "Bureau-2-IT-01",
+                  "severityValue": "INFORMATION",
+                  "message": "\"The System log file was cleared.\""
+                },
+                "logFileCleared": {
+                  "subjectUserName": "IT-Admin",
+                  "subjectDomainName": "AzureAD",
+                  "channel": "System",
+                  "clientProcessId": "2856",
+                  "clientProcessStartKey": "3940649673949710"
+                }
+              }
+            },
+            "location": "EventChannel"
+          },
+          "webhookUrl": "https://n8n.charif-labs.tech/webhook/wazuh-ai",
+          "executionMode": "production"
+        },
+        "pairedItem": {
+          "item": 0
+        }
+      }
+    ]
+  },
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Normalize incoming Wazuh alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize incoming Wazuh alert": {
+      "main": [
+        [
+          {
+            "node": "Deduplication Cache",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Deduplication Cache": {
+      "main": [
+        [
+          {
+            "node": "If1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If1": {
+      "main": [
+        [
+          {
+            "node": "Simple Code",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "HashiCorp Vault",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HashiCorp Vault": {
+      "main": [
+        [
+          {
+            "node": "Parse Vault Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Vault Response": {
+      "main": [
+        [
+          {
+            "node": "OpenSearch Historical Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenSearch Historical Query": {
+      "main": [
+        [
+          {
+            "node": "Parse Enrichment Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Enrichment Response": {
+      "main": [
+        [
+          {
+            "node": "HashiCorp Vault1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HashiCorp Vault1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript1": {
+      "main": [
+        [
+          {
+            "node": "Wazuh API Authentication - Get JWT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wazuh API Authentication - Get JWT": {
+      "main": [
+        [
+          {
+            "node": "Parse JWT",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse JWT": {
+      "main": [
+        [
+          {
+            "node": "Build LLM Context Object",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build LLM Context Object": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain1",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain1": {
+      "main": [
+        [
+          {
+            "node": "Parse & Validate LLM JSON Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Validate LLM JSON Output": {
+      "main": [
+        [
+          {
+            "node": "Action Router",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Action Router": {
+      "main": [
+        [
+          {
+            "node": "Log & Suppress",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "INVESTIGATE",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Validate Preconditions",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Fallback error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "Parse Active Response & Build Audit Record",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Preconditions": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INVESTIGATE": {
+      "main": [
+        []
+      ]
+    },
+    "Log & Suppress": {
+      "main": [
+        [
+          {
+            "node": "Send an Email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Active Response & Build Audit Record": {
+      "main": [
+        [
+          {
+            "node": "Send an Email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fallback error": {
+      "main": [
+        [
+          {
+            "node": "If2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If2": {
+      "main": [
+        [
+          {
+            "node": "Fallback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send an Email1": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Send To Opensearch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "INVESTIGATE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send To Opensearch": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "ac7e120c-dad8-4903-9634-a196deb4902f",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "44ab87af680df026be25e7824704255cdf1f8c9a1380bbe190e036a3d0ff159d"
+  },
+  "id": "B8PsyQLHd8lT7kBk",
+  "tags": []
+}
