@@ -126,20 +126,37 @@ The platform's architecture is built on a layered approach, with Cloudflare Zero
 ---
 
 ## 🛠️ Key Technologies & Concepts
-This project leverages a diverse array of technologies, orchestrating them to deliver a resilient, secure, and automated infrastructure. Below are the core components and concepts employed:
 
--   **Cloudflare Zero Trust:** Secure connectivity and access control.
--   **Terraform:** Infrastructure as Code for Cloudflare resources.
--   **Docker & Docker Compose:** Containerization and orchestration.
--   **Ansible:** For configuration management, host hardening, and automated deployment tasks on the Docker host, ensuring consistency and security.
--   **Keycloak:** Open-source Identity and Access Management (IAM) and SSO.
--   **Wazuh:** XDR platform for security monitoring, log analysis, and threat detection.
--   **HashiCorp Vault:** Secrets management.
--   **n8n:** Workflow automation tool.
--   **Prometheus:** Monitoring system.
--   **Grafana:** Data visualization and dashboarding.
--   **PostgreSQL:** Database for Keycloak.
--   **CI/CD Pipeline:** Implemented via GitHub Actions, the pipeline integrates automated security scanning (e.g., for secrets), infrastructure validation (Terraform plan/apply dry runs), automatic version tagging, and webhook-triggered deployments to Portainer. This ensures that changes are validated and deployed consistently, minimizing manual errors and enhancing overall operational security and efficiency.
+This project leverages a diverse array of technologies, orchestrating them to deliver a resilient, secure, and automated infrastructure. Below are the core components and concepts employed, categorized by their primary function:
+
+### 🛡️ Security & Access Control
+
+-   **Cloudflare Zero Trust:** Provides secure connectivity and access control, acting as the edge firewall and eliminating the need for inbound ports on the host.
+-   **Keycloak:** An open-source Identity and Access Management (IAM) solution for centralized Single Sign-On (SSO) and robust authentication/authorization.
+-   **Wazuh:** A comprehensive Extended Detection and Response (XDR) platform for endpoint security, log analysis, intrusion detection, and compliance monitoring.
+-   **HashiCorp Vault:** Secure secrets management for storing and accessing sensitive information, bound to localhost for enhanced security.
+
+### ☁️ Infrastructure as Code (IaC) & Automation
+
+-   **Terraform:** Used for provisioning and managing Cloudflare resources, including DNS, Tunnels, Access Policies, and Email Routing, ensuring infrastructure is defined and deployed consistently.
+-   **Ansible:** Employed for configuration management, host hardening, and automated deployment tasks on the Linux Docker host, ensuring consistency and security baselines.
+-   **GitHub Actions:** The backbone of our DevSecOps practices, providing automated CI/CD pipelines for security scanning, validation, version tagging, and Portainer-triggered deployments.
+-   **n8n:** A workflow automation tool used for building automated workflows, integrating various services, and responding to security or operational events.
+
+### 🐳 Containerization & Orchestration
+
+-   **Docker & Docker Compose:** Utilized for containerizing all services, providing efficient deployment, isolation, and orchestration of the entire application stack.
+-   **Portainer CE:** A web-based UI for simplified management and monitoring of Docker environments.
+
+### 📊 Monitoring & Observability
+
+-   **Prometheus:** A powerful monitoring system for collecting metrics from all services and the Docker host.
+-   **Grafana:** Provides rich data visualization and dashboarding capabilities, integrating with Prometheus to offer real-time insights into system and application health.
+-   **Node Exporter:** A Prometheus exporter for hardware and OS metrics exposed by Unix kernels.
+
+### 🗃️ Databases
+
+-   **PostgreSQL:** The robust relational database serving as the backend for Keycloak.
 
 ---
 
