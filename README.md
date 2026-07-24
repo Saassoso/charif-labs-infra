@@ -4,9 +4,34 @@
 
 ---
 
+## 📖 Table of Contents
+- [🌟 Introduction](#-introduction)
+- [✨ Features](#-features)
+- [🏗️ Architecture Overview](#️-architecture-overview)
+- [🛠️ Technologies Used](#️-technologies-used)
+- [📁 Repository Structure](#-repository-structure)
+- [🚀 Getting Started](#-getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Phase 1 — Terraform (Cloudflare IaC)](#phase-1--terraform-cloudflare-iac)
+  - [Phase 2 — Docker Sovereign Stack](#phase-2--docker-sovereign-stack)
+  - [Phase 3 — Keycloak Configuration](#phase-3--keycloak-configuration)
+  - [Phase 4 — Wazuh XDR Deployment](#phase-4--wazuh-xdr-deployment)
+  - [Phase 5 — Ansible Docker-Host Management](#phase-5--ansible-docker-host-management)
+  - [Phase 6 — Verify Zero Trust Access](#phase-6--verify-zero-trust-access)
+- [🌐 Service Map](#-service-map)
+- [🔐 Security Model](#-security-model)
+- [📖 Documentation](#-documentation)
+- [⚠️ Important Notes](#️-important-notes)
+- [🛠️ Maintenance & Troubleshooting](#️-maintenance--troubleshooting)
+- [🤝 Contributing](#-contributing)
+- [📜 License](#-license)
+- [📧 Contact](#-contact)
+
+---
+
 ## 🌟 Introduction
 
-The CHARif-LABS-INFRA project provides a complete, self-hosted solution for modern security operations, empowering organizations to establish a strong security posture with a Zero-Trust approach. This platform integrates leading open-source and community-edition tools to deliver:
+This project, CHARif-LABS-INFRA, offers a comprehensive, self-hosted solution for modern security operations, enabling organizations to achieve a robust security posture through a Zero-Trust framework. It integrates cutting-edge open-source and community-edition tools to provide:
 
 -   **Centralized Identity and Access Management (IAM):** Secure authentication and authorization with Keycloak.
 -   **Extended Detection and Response (XDR):** Comprehensive security monitoring and threat detection with Wazuh.
@@ -17,7 +42,7 @@ The CHARif-LABS-INFRA project provides a complete, self-hosted solution for mode
 -   **Secrets Management:** Secure storage and access to sensitive information with HashiCorp Vault.
 -   **Workflow Automation:** Streamlined security and operational tasks with n8n.
 
-This stack is designed to run on a single Linux Docker host, secured from the internet by Cloudflare Zero Trust Tunnels, eliminating the need for inbound firewall rules.
+This stack is optimized for deployment on a single Linux Docker host, fortified against internet threats by Cloudflare Zero Trust Tunnels. This architecture inherently eliminates the necessity for traditional inbound firewall rules, shifting protection to the edge.
 
 ---
 
@@ -31,12 +56,13 @@ This stack is designed to run on a single Linux Docker host, secured from the in
 -   **Secure Secrets Management:** HashiCorp Vault provides centralized, audited storage for sensitive data (localhost-bound).
 -   **Proactive Monitoring:** Prometheus and Grafana for real-time insights into system and application health.
 -   **Workflow Automation:** n8n for building automated workflows, integrating various services and responding to events.
--   **CI/CD Pipeline:** GitHub Actions for automated security scanning, validation, version tagging, and Portainer-triggered deployments.
--   **Host Hardening:** Ansible playbooks for establishing a secure baseline configuration on the Docker host.
+-   **DevSecOps Automation:** GitHub Actions provide a robust CI/CD pipeline, integrating automated security scanning, validation, version tagging, and Portainer-triggered deployments to ensure secure and efficient operations.
+-   **Host Hardening:** Ansible playbooks are utilized for establishing a secure baseline configuration and continuous management of the Docker host, including essential security controls.
 
 ---
 
 ## 🏗️ Architecture Overview
+The platform's architecture is meticulously designed with a layered security approach, where Cloudflare Zero Trust serves as the primary secure edge, safeguarding all internally hosted services. This setup inherently negates the need for traditional firewall configurations by ensuring all traffic is brokered through Cloudflare's secure network.
 
 The platform's architecture is built on a layered approach, with Cloudflare Zero Trust acting as the secure edge, protecting all internally hosted services.
 
@@ -85,12 +111,13 @@ The platform's architecture is built on a layered approach, with Cloudflare Zero
 
 ---
 
-## 🛠️ Technologies Used
+## 🛠️ Key Technologies & Concepts
+This project leverages a diverse array of technologies, orchestrating them to deliver a resilient, secure, and automated infrastructure. Below are the core components and concepts employed:
 
 -   **Cloudflare Zero Trust:** Secure connectivity and access control.
 -   **Terraform:** Infrastructure as Code for Cloudflare resources.
 -   **Docker & Docker Compose:** Containerization and orchestration.
--   **Ansible:** Configuration management for the Docker host.
+-   **Ansible:** For configuration management, host hardening, and automated deployment tasks on the Docker host, ensuring consistency and security.
 -   **Keycloak:** Open-source Identity and Access Management (IAM) and SSO.
 -   **Wazuh:** XDR platform for security monitoring, log analysis, and threat detection.
 -   **HashiCorp Vault:** Secrets management.
@@ -98,7 +125,7 @@ The platform's architecture is built on a layered approach, with Cloudflare Zero
 -   **Prometheus:** Monitoring system.
 -   **Grafana:** Data visualization and dashboarding.
 -   **PostgreSQL:** Database for Keycloak.
--   **GitHub Actions:** CI/CD pipeline for automation.
+-   **GitHub Actions:** Implementing DevSecOps principles through automated CI/CD pipelines, covering security scanning, validation, and deployment workflows.
 
 ---
 
@@ -162,9 +189,20 @@ charif-labs-infra/
 
 ## 🚀 Getting Started
 
-These are the high-level steps to deploy the Sovereign Security Stack. **For detailed, copy-paste instructions, refer to the guides in the `docs/` directory.**
+This section outlines the high-level deployment steps for the Sovereign Security Stack. **For detailed, copy-paste instructions and in-depth explanations, always refer to the specific guides located in the `docs/` directory.** Each phase below corresponds to a detailed document.
 
 ### Prerequisites
+Before embarking on the deployment, ensure you have the following prerequisites in place:
+-   **Cloudflare Account:** A domain registered and managed by Cloudflare is essential for leveraging its Zero Trust capabilities and DNS management.
+-   **Linux Host:** A dedicated Linux server (e.g., Ubuntu LTS) with Docker and Docker Compose installed.
+    -   **Minimum Specs:** 4 CPU cores, 8 GB RAM, 50 GB SSD.
+    -   **Network:** The host only requires outbound HTTPS (443) access. Critically, **no inbound ports are required or should be opened on your firewall**, as all external access is mediated by Cloudflare Zero Trust Tunnels.
+-   **Terraform CLI:** Version 1.5.0 or newer for managing Cloudflare infrastructure as code.
+-   **Ansible:** For streamlined Docker host hardening and ongoing maintenance.
+-   **Gmail Address:** Required for Cloudflare Email Routing's catch-all functionality.
+-   **SSH Access:** To your Linux Docker host for initial setup and Ansible operations.
+
+For a comprehensive guide on prerequisites and architectural considerations, refer to [01 — Prerequisites & Architecture](docs/01-Prerequisites-and-Architecture.md).
 
 Before you begin, ensure you have the following:
 
@@ -201,7 +239,7 @@ Before you begin, ensure you have the following:
     terraform plan
     terraform apply
     ```
-    This provisions Cloudflare Zero Trust Tunnels, DNS records, Email routing, and initial Access Applications. **Copy the sensitive `cloudflare_zero_trust_tunnel_cloudflared_token` output.**
+    This step provisions all necessary Cloudflare resources: Zero Trust Tunnels, DNS records, Email routing, and initial Access Applications. It effectively configures your edge firewall via Cloudflare. **Crucially, copy the sensitive `cloudflare_zero_trust_tunnel_cloudflared_token` output; it will be needed in the next phase.**
 
 ### Phase 2 — Docker Sovereign Stack
 
@@ -230,7 +268,7 @@ Before you begin, ensure you have the following:
                          --env-file ./1-foundation/cloudflared/.env \
                          up -d
     ```
-    This starts all services, including Cloudflared, Keycloak, PostgreSQL, Portainer, Vault, n8n, Wazuh, Prometheus, and Grafana.
+    This command launches all containerized services, including Cloudflared, Keycloak, PostgreSQL, Portainer, Vault, n8n, Wazuh, Prometheus, and Grafana. The Docker Compose setup inherently provides a level of high availability and service orchestration for the application stack.
 
 ### Phase 3 — Keycloak Configuration
 
@@ -242,14 +280,14 @@ Before you begin, ensure you have the following:
 6.  **User Attributes & Mappers:** Create a `ztna_role` user attribute and an OIDC mapper to include it in tokens.
 7.  **Create Users & Groups:** Create an `it-admin` group and an admin user, assigning them to the group and setting `ztna_role`.
 
-*Refer to [04 — Keycloak Identity Provider](docs/04-Keycloak-Identity-Provider.md) for full details.*
+*For comprehensive details on Keycloak configuration, including realm setup, OIDC client specifics, user attributes, and IdP mapping, refer to [04 — Keycloak Identity Provider](docs/04-Keycloak-Identity-Provider.md).*
 
 ### Phase 4 — Wazuh XDR Deployment
 
 1.  **Access Dashboard:** Browse to `https://wazuh.your-domain.com` and log in with default credentials (`admin`/`SecretPassword`).
 2.  **Change Default Passwords:** **CRITICAL!** Update `INDEXER_PASSWORD`, `DASHBOARD_PASSWORD`, and `API_PASSWORD` in `docker/2-applications/security/docker-compose.yml` and restart the Wazuh stack. Update `internal_users.yml` and hash the new password within the `wazuh.indexer` container.
 
-*Refer to [05 — Wazuh XDR Deployment](docs/05-Wazuh-XDR-Deployment.md) for full details.*
+*For detailed steps on Wazuh deployment, including SSL certificates, indexer configuration, dashboard access, and agent enrollment, refer to [05 — Wazuh XDR Deployment](docs/05-Wazuh-XDR-Deployment.md).*
 
 ### Phase 5 — Ansible Docker-Host Management
 
@@ -265,7 +303,7 @@ Before you begin, ensure you have the following:
     ```
     Extend with additional playbooks for SSH hardening, firewall configuration, and other security baselines.
 
-*Refer to [06 — Ansible Docker-Host Management](docs/06-Ansible-Docker-Host-Management.md) for full details.*
+*For an in-depth guide on Ansible inventory setup, host hardening playbooks, and secure configuration management for your Linux Docker host, refer to [06 — Ansible Docker-Host Management](docs/06-Ansible-Docker-Host-Management.md).*
 
 ### Phase 6 — Verify Zero Trust Access
 
@@ -276,7 +314,7 @@ Browse to each service and confirm Cloudflare Access prompts for Keycloak login,
 -   `https://grafana.your-domain.com`
 -   `https://n8n.your-domain.com`
 
-*Refer to [07 — Zero Trust Access Configuration](docs/07-Zero-Trust-Access-Configuration.md) for full details.*
+*To understand how Cloudflare Access Policies function, troubleshoot authentication loops, and implement break-glass access, refer to [07 — Zero Trust Access Configuration](docs/07-Zero-Trust-Access-Configuration.md).*
 
 ---
 
@@ -333,8 +371,8 @@ Each document provides a standalone, step-by-step guide. It is recommended to re
 -   **Cloudflare tunnel token** is base64-encoded JSON. Treat it as sensitive as an API key.
 -   **The `moved.tf` file** handles Terraform state migration from Cloudflare provider v4 to v5. Do not delete it if you have existing state.
 -   **Vault is bound to localhost only.** It is intentionally not exposed through the Cloudflare tunnel. Access it via `ssh -L 8200:localhost:8200 <host>`.
--   **Ansible targets the Docker host.** All playbooks are designed for the Linux server running Docker, not for remote Windows endpoints.
--   **Wazuh Agent Deployment:** Wazuh agents are deployed and managed on endpoints via Action1, not Ansible.
+-   **Ansible for Docker Host Management:** Ansible playbooks are specifically crafted for the Linux server hosting Docker, ensuring secure and consistent configuration of the infrastructure rather than application-level deployment.
+-   **Wazuh Agent Deployment:** It's important to note that Wazuh agents for endpoint security are deployed and managed on target systems (e.g., Windows, Linux workstations) via Action1 or similar endpoint management solutions, not directly through Ansible within this project's scope.
 
 ---
 
@@ -366,13 +404,13 @@ Each document provides a standalone, step-by-step guide. It is recommended to re
 -   **Authentication Loop**: Ensure `auth.your-domain.com` has a `bypass` policy in Cloudflare Access and Keycloak client redirect URIs are correct.
 -   **403 Forbidden / Access Denied**: Check Keycloak user groups/roles and Cloudflare Zero Trust Audit Logs (`Zero Trust` → `Access` → `Audit Logs`).
 
-*For more detailed troubleshooting, refer to [09 — Maintenance and Troubleshooting](docs/09-Maintenance-and-Troubleshooting.md).*
+*For more in-depth troubleshooting guides, common issue resolutions, log locations, restart procedures, and break-glass steps, refer to [09 — Maintenance and Troubleshooting](docs/09-Maintenance-and-Troubleshooting.md).*
 
 ---
 
 ## 🤝 Contributing
 
-This project is maintained for the CHARif-LABS-INFRA PFE. While direct contributions are not expected for the final submission, the following general guidelines apply for any future development or extensions:
+This project is primarily maintained for the CHARif-LABS-INFRA PFE (Projet de Fin d'Études). While direct contributions are not solicited for the immediate submission, the following general guidelines are provided for any future development, extensions, or community involvement:
 
 1.  **Fork the Repository:** Start by forking this repository.
 2.  **Create a New Branch:** For each feature or bug fix, create a new branch (e.g., `feature/new-service`, `bugfix/wazuh-password`).
